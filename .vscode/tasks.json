@@ -1,0 +1,40 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build",
+			"type": "shell",
+			"windows": {
+				"command": "C:\\msys64\\usr\\bin\\bash.exe -l '${workspaceFolder}\\build-msys.sh' '${file}' '${workspaceFolder}\\out\\${fileBasenameNoExtension}'",
+				"options": {
+					"env": {
+						"MSYSTEM": "MINGW64"
+					}
+				}
+			},
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "Test",
+			"type": "shell",
+			"windows": {
+				"command": "C:\\msys64\\usr\\bin\\bash.exe -l '${workspaceFolder}\\run-msys.sh' '${workspaceFolder}\\out' '${workspaceFolder}\\out\\${fileBasenameNoExtension}'",
+				"options": {
+					"env": {
+						"MSYSTEM": "MINGW64"
+					}
+				}
+			},
+			"dependsOn": ["Build"],
+			"problemMatcher": [],
+			"group": {
+				"kind": "test",
+				"isDefault": true
+			}
+		}
+	]
+}
