@@ -4,6 +4,7 @@
 		{
 			"label": "Build",
 			"type": "shell",
+			"command": "iverilog -o '${workspaceFolder}/out/${fileBasenameNoExtension}' -DDUMPFILE='\"${fileBasenameNoExtension}.vcd\"' '${file}'",
 			"windows": {
 				"command": "C:\\msys64\\usr\\bin\\bash.exe -l '${workspaceFolder}\\build-msys.sh' '${file}' '${workspaceFolder}\\out\\${fileBasenameNoExtension}'",
 				"options": {
@@ -21,6 +22,7 @@
 		{
 			"label": "Test",
 			"type": "shell",
+			"command": "cd '${workspaceFolder}/out' && vvp '${workspaceFolder}/out/${fileBasenameNoExtension}' && gtkwave '${workspaceFolder}/out/${fileBasenameNoExtension}.vcd'",
 			"windows": {
 				"command": "C:\\msys64\\usr\\bin\\bash.exe -l '${workspaceFolder}\\run-msys.sh' '${workspaceFolder}\\out' '${workspaceFolder}\\out\\${fileBasenameNoExtension}'",
 				"options": {
