@@ -4,9 +4,9 @@
 		{
 			"label": "Build",
 			"type": "shell",
-			"command": "iverilog -o '${workspaceFolder}/out/${fileBasenameNoExtension}' -DDUMPFILE='\"${fileBasenameNoExtension}.vcd\"' '${file}'",
+			"command": "make",
 			"windows": {
-				"command": "C:\\msys64\\usr\\bin\\bash.exe -l '${workspaceFolder}\\build-msys.sh' '${file}' '${workspaceFolder}\\out\\${fileBasenameNoExtension}'",
+				"command": "C:\\msys64\\usr\\bin\\bash.exe -l '${workspaceFolder}\\build-msys.sh' '${fileDirname}'",
 				"options": {
 					"env": {
 						"MSYSTEM": "MINGW64"
@@ -22,9 +22,9 @@
 		{
 			"label": "Test",
 			"type": "shell",
-			"command": "cd '${workspaceFolder}/out' && vvp '${workspaceFolder}/out/${fileBasenameNoExtension}' && gtkwave '${workspaceFolder}/out/${fileBasenameNoExtension}.vcd'",
+			"command": "bash '${workspaceFolder}\\run.sh' '${fileDirname}/out/${fileBasenameNoExtension}'",
 			"windows": {
-				"command": "C:\\msys64\\usr\\bin\\bash.exe -l '${workspaceFolder}\\run-msys.sh' '${workspaceFolder}\\out' '${workspaceFolder}\\out\\${fileBasenameNoExtension}'",
+				"command": "C:\\msys64\\usr\\bin\\bash.exe -l '${workspaceFolder}\\run.sh' '${fileDirname}\\out\\${fileBasenameNoExtension}'",
 				"options": {
 					"env": {
 						"MSYSTEM": "MINGW64"
