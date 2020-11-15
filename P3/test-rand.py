@@ -37,7 +37,7 @@ for i in range(0, count):
                 base = random.choice(regs)
                 offset = (addr << 2) - testlib.grf[base]
                 ii16 = np.iinfo(np.int16)
-                if offset in range(ii16.min, ii16.max + 1):
+                if offset in np.arange(ii16.min, ii16.max + 1):
                     break
             if op == 5:
                 testlib.lw(rt, base, offset)
