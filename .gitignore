@@ -1,2 +1,19 @@
+__pycache__/
 out/
+test-rand-logs/
+venv/
 *.vcd
+*.zip
+code.txt
+test.asm
+
+# Xilinx ISE
+_xmsgs/
+iseconfig/
+isim/
+*.gise
+*_summary.html
+*.prj
+*.xise
+*.xmsgs
+xilinxsim.ini

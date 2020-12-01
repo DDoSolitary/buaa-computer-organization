@@ -10,7 +10,8 @@ cd "$out_dir"
 if [ -f "$proj_name" ]; then
 	cp ../code.txt .
 	vvp "$proj_name"
+	gtkwave "$proj_name.vcd"
 else
 	vvp "$file"
+	gtkwave "$file.vcd"
 fi
-gtkwave "$file.vcd"
