@@ -8,7 +8,8 @@ module mips(
 
 	wire [4:0] d_read_addr0, d_read_addr1, d_write_addr;
 	wire [31:0] grf_read_data0, grf_read_data1, d_read_data0, d_read_data1, d_ext_imm, d_next_pc;
-	wire [1:0] d_read_stage0, d_read_stage1, d_write_stage, d_alu_op;
+	wire [1:0] d_read_stage0, d_read_stage1, d_write_stage;
+	wire [2:0] d_alu_op;
 	wire d_alu_src1, d_mem_write;
 
 	wire [31:0] e_read_data0, e_read_data1, e_alu_result, e_write_data;
@@ -20,7 +21,8 @@ module mips(
 	reg [31:0] de_pc;
 	reg [4:0] de_read_addr0, de_read_addr1, de_write_addr;
 	reg [31:0] de_read_data0, de_read_data1, de_write_data, de_ext_imm;
-	reg [1:0] de_write_stage, de_alu_op;
+	reg [1:0] de_write_stage;
+	reg [2:0] de_alu_op;
 	reg de_alu_src1, de_mem_write;
 
 	reg [31:0] em_pc;
@@ -56,11 +58,13 @@ module mips(
 		em_read_addr == 0 ? 0 :
 		em_read_addr == mw_write_addr ? mw_write_data : em_read_data;
 
-	wire stall = de_write_addr != 0 &&
+	wire stall_de = de_write_addr != 0 &&
 		((d_read_addr0 == de_write_addr && de_write_stage > d_read_stage0) ||
-		(d_read_addr0 == em_write_addr && em_write_stage - 1 > d_read_stage0) ||
-		(d_read_addr1 == de_write_addr && de_write_stage > d_read_stage1) ||
+		(d_read_addr1 == de_write_addr && de_write_stage > d_read_stage1));
+	wire stall_em = em_write_addr != 0 &&
+		((d_read_addr0 == em_write_addr && em_write_stage - 1 > d_read_stage0) ||
 		(d_read_addr1 == em_write_addr && em_write_stage - 1 > d_read_stage1));
+	wire stall = stall_de || stall_em;
 
 	assign f_next_pc = stall ? f_pc : d_next_pc;
 

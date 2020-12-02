@@ -1,0 +1,16 @@
+[package]
+name = "co-tester"
+version = "0.1.0"
+authors = ["DDoSolitary <DDoSolitary@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+futures = "0.3.8"
+num_cpus = "1.13.0"
+tempdir = "0.3.7"
+tokio = { version = "0.3.5", features = ["full"] }
+rand = "0.7.3"
+rand_distr = "0.3.0"
+
+[profile.release]
+lto = true

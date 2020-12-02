@@ -12,3 +12,4 @@
 `define ALU_OP_SUB 1
 `define ALU_OP_OR 2
 `define ALU_OP_SL16 3
+`define ALU_OP_AND 4

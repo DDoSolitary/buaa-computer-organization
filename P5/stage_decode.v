@@ -12,7 +12,7 @@ module stage_decode(
 	output wire [4:0] grf_write_addr,
 	output wire [1:0] grf_write_stage,
 	output wire alu_src1,
-	output wire [1:0] alu_op,
+	output wire [2:0] alu_op,
 	output wire [31:0] ext_imm,
 	output wire mem_write,
 	output wire [31:0] next_pc
@@ -27,6 +27,7 @@ module stage_decode(
 	wire op_sp = op == 6'b000000;
 	wire addu = op_sp && func == 6'b100001;
 	wire subu = op_sp && func == 6'b100011;
+	wire andi = op == 6'b001100;
 	wire ori = op == 6'b001101;
 	wire lw = op == 6'b100011;
 	wire sw = op == 6'b101011;
@@ -40,26 +41,27 @@ module stage_decode(
 	assign grf_read_addr1 = rt_addr;
 	assign grf_read_stage0 =
 		beq || jr ? `STAGE_DECODE :
-		addu || subu || ori || lw || sw ? `STAGE_EXECUTE : `STAGE_MAX;
+		addu || subu || andi || ori || lw || sw ? `STAGE_EXECUTE : `STAGE_MAX;
 	assign grf_read_stage1 =
 		beq ? `STAGE_DECODE :
 		addu || subu ? `STAGE_EXECUTE :
 		sw ? `STAGE_MEM : `STAGE_MAX;
 	assign grf_write_addr =
 		addu || subu ? rd_addr :
-		ori || lw || lui ? rt_addr :
+		andi || ori || lw || lui ? rt_addr :
 		jal ? 31 : 0;
 	assign grf_write_stage =
 		jal ? `STAGE_DECODE :
-		addu || subu || ori || lui ? `STAGE_EXECUTE :
+		addu || subu || andi || ori || lui ? `STAGE_EXECUTE :
 		lw ? `STAGE_MEM : 0;
 	assign alu_src1 =
-		ori || lw || sw || lui ? `ALU_SRC1_EXT : `ALU_SRC1_RT;
+		andi || ori || lw || sw || lui ? `ALU_SRC1_EXT : `ALU_SRC1_RT;
 	assign alu_op =
 		addu || lw || sw ? `ALU_OP_ADD :
 		subu ? `ALU_OP_SUB :
 		ori ? `ALU_OP_OR :
-		lui ? `ALU_OP_SL16 : 0;
+		lui ? `ALU_OP_SL16 :
+		andi ? `ALU_OP_AND : 0;
 	assign ext_imm = lw || sw ? $signed({imm, 16'b0}) >>> 16 : $signed({16'b0, imm});
 	assign mem_write = sw;
 
