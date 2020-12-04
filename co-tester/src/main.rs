@@ -308,7 +308,7 @@ async fn main() {
 			std::panic::catch_unwind(|| {
 				let mars_log = String::from_utf8_lossy(&mars_res.stdout);
 				let vvp_log = String::from_utf8_lossy(&vvp_res.stdout);
-				assert!(mars_res.status.success(),
+				assert!(mars_res.status.success() && code_path.exists(),
 					"Failed to run MARS.\nstdout:\n{}\nsterr:\n{}",
 					mars_log, String::from_utf8_lossy(&mars_res.stderr));
 				assert!(vvp_res.status.success(),
