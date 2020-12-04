@@ -245,19 +245,23 @@ async fn main() {
 			])
 			.stdin(Stdio::null())
 			.output().await.unwrap();
-		let mars_log = String::from_utf8_lossy(&mars_res.stdout).into_owned();
-		assert!(mars_res.status.success(), "Failed to run MARS.\nstdout:\n{}\nsterr:\n{}", mars_log, String::from_utf8_lossy(&mars_res.stderr));
 		let vvp_res = Command::new("vvp")
 			.arg(std::env::current_dir().unwrap().join(subject_path))
 			.current_dir(dir_path)
 			.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::inherit())
 			.output().await.unwrap();
-		let vvp_log = String::from_utf8_lossy(&vvp_res.stdout).into_owned();
-		assert!(vvp_res.status.success(), "Failed to run the test subject.\nstdout:\n{}\nstderr:\n{}", vvp_log, String::from_utf8_lossy(&vvp_res.stderr));
-		File::create(&mars_log_path).await.unwrap().write_all(mars_log.as_bytes()).await.unwrap();
-		File::create(&vvp_log_path).await.unwrap().write_all(vvp_log.as_bytes()).await.unwrap();
+		File::create(&mars_log_path).await.unwrap().write_all(&mars_res.stdout).await.unwrap();
+		File::create(&vvp_log_path).await.unwrap().write_all(&vvp_res.stdout).await.unwrap();
 		let res = tokio::task::spawn_blocking(move || {
 			std::panic::catch_unwind(|| {
+				let mars_log = String::from_utf8_lossy(&mars_res.stdout);
+				let vvp_log = String::from_utf8_lossy(&vvp_res.stdout);
+				assert!(mars_res.status.success(),
+					"Failed to run MARS.\nstdout:\n{}\nsterr:\n{}",
+					mars_log, String::from_utf8_lossy(&mars_res.stderr));
+				assert!(vvp_res.status.success(),
+					"Failed to run the test subject.\nstdout:\n{}\nstderr:\n{}",
+					vvp_log, String::from_utf8_lossy(&vvp_res.stderr));
 				let mut mars_reg_lines = Vec::new();
 				let mut mars_mem_lines = Vec::new();
 				for line in mars_log.split('\n') {
@@ -286,8 +290,12 @@ async fn main() {
 					assert!(mars_line.is_some(), "Got \"{}\" at line {}, but MARS output has ended.", vvp_line, i + 1);
 					assert_eq!(*mars_line.unwrap(), vvp_line, "Unexpected output at line {}.", i + 1);
 				}
-				assert_eq!(mars_reg_lines.len(), reg_id, "Too few register writes, the next expected line is \"{}\".", mars_reg_lines[reg_id]);
-				assert_eq!(mars_mem_lines.len(), mem_id, "Too few memory writes, the next expected line is \"{}\".", mars_mem_lines[mem_id]);
+				assert_eq!(mars_reg_lines.len(), reg_id,
+					"Too few register writes, the next expected line is \"{}\".",
+					mars_reg_lines[reg_id]);
+				assert_eq!(mars_mem_lines.len(), mem_id,
+					"Too few memory writes, the next expected line is \"{}\".",
+					mars_mem_lines[mem_id]);
 			})
 		}).await.unwrap();
 		if res.is_err() {
