@@ -8,7 +8,10 @@ extern crate tokio;
 extern crate rand;
 extern crate rand_distr;
 
+use std::collections::HashSet;
 use std::process::Stdio;
+use std::str::FromStr;
+use std::sync::Arc;
 
 use futures::prelude::*;
 use tokio::prelude::*;
@@ -16,13 +19,13 @@ use rand::prelude::*;
 
 use rand::distributions::Uniform;
 use rand_distr::Normal;
-use strum::{IntoEnumIterator, VariantNames};
-use strum_macros::{Display, EnumIter, EnumVariantNames};
+use strum::{AsStaticRef, IntoEnumIterator, VariantNames};
+use strum_macros::{Display, AsStaticStr, EnumIter, EnumString, EnumVariantNames};
 use tempdir::TempDir;
 use tokio::fs::File;
 use tokio::process::Command;
 
-#[derive(Copy, Clone, Eq, PartialEq, Display, EnumIter, EnumVariantNames)]
+#[derive(Copy, Clone, Eq, PartialEq, Display, AsStaticStr, EnumIter, EnumString, EnumVariantNames)]
 #[strum(serialize_all = "kebab_case")]
 enum Op {
 	Nop,
@@ -44,6 +47,14 @@ impl Op {
 		match self {
 			Op::Beq | Op::J | Op::Jal | Op::Jr => true,
 			_ => false,
+		}
+	}
+
+	fn dependencies(&self) -> Vec<Op> {
+		match self {
+			Op::Lw | Op::Sw => vec![Op::Ori, Op::Lui],
+			Op::Jr => vec![Op::Ori],
+			_ => vec![],
 		}
 	}
 }
@@ -79,6 +90,16 @@ async fn main() {
 			.takes_value(true)
 			.default_value(&default_threads)
 			.help("Number of threads used to run the tests in parallel."))
+		.arg(clap::Arg::with_name("only-instr")
+			.long("only-instr")
+			.takes_value(true)
+			.conflicts_with("exclude-instr")
+			.help("A comma-separated list of instructions that will be generated."))
+		.arg(clap::Arg::with_name("exclude-instr")
+			.long("exclude-instr")
+			.takes_value(true)
+			.conflicts_with("only-instr")
+			.help("A comma-separated list of instructions that will not be generated."))
 		.arg(clap::Arg::with_name("tmp-dir")
 			.short("d")
 			.long("tmp-dir")
@@ -102,11 +123,36 @@ async fn main() {
 	let tmp_dir = matches.value_of_os("tmp-dir").unwrap();
 	let mars_path = matches.value_of_os("mars-path").unwrap();
 	let subject_path = matches.value_of_os("subject-path").unwrap();
+	let ops = if let Some(only_instr) = matches.value_of("only-instr") {
+		only_instr.split(',').map(|s| {
+			Op::from_str(s).unwrap_or_else(|_| {
+				println!("Error: unsupported instruction: {}", s);
+				std::process::exit(1);
+			})
+		}).collect::<Vec<_>>()
+	} else {
+		let excluded = matches.value_of("exclude-instr")
+			.unwrap_or("")
+			.split(',')
+			.collect::<HashSet<_>>();
+		Op::iter().filter(|op| {
+			!excluded.contains(op.as_static())
+		}).collect::<Vec<_>>()
+	};
+	for op in &ops {
+		for dep in &op.dependencies() {
+			if !ops.contains(dep) {
+				println!("Error: instruction {} is required by {}.", dep, op);
+				std::process::exit(1);
+			}
+		}
+	}
+	let ops = Arc::new(ops);
 
 	stream::iter(0..test_count).for_each_concurrent(thread_count, |_| async {
-		let asm_data = tokio::task::spawn_blocking(|| {
+		let ops = Arc::clone(&ops);
+		let asm_data = tokio::task::spawn_blocking(move || {
 			let mut rng = rand::thread_rng();
-			let ops = Op::iter().collect::<Vec<_>>();
 			let op_dist = Uniform::new(0, ops.len());
 			let reg_dist = Uniform::new(0, 32);
 			let imm_dist = Uniform::new_inclusive(0, u16::max_value());
