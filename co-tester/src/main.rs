@@ -1,3 +1,4 @@
+extern crate clap;
 extern crate futures;
 extern crate num_cpus;
 extern crate tempdir;
@@ -77,10 +78,48 @@ fn reg_rand_or_last<T: rand::Rng>(x: i32, rng: &mut T, last_written: Option<i32>
 
 #[tokio::main]
 async fn main() {
-	let args = std::env::args().collect::<Vec<_>>();
-	let test_count = args.get(1).unwrap_or(&"1".to_owned()).parse::<u32>().unwrap();
+	let default_threads = num_cpus::get().to_string();
+	let sys_tmp_dir = std::env::temp_dir().into_os_string();
+	let matches = clap::App::new(env!("CARGO_PKG_NAME"))
+		.version(env!("CARGO_PKG_VERSION"))
+		.author(env!("CARGO_PKG_AUTHORS"))
+		.arg(clap::Arg::with_name("count")
+			.short("c")
+			.long("count")
+			.takes_value(true)
+			.default_value("1")
+			.help("Number of tests to run in total."))
+		.arg(clap::Arg::with_name("threads")
+			.short("t")
+			.long("threads")
+			.takes_value(true)
+			.default_value(&default_threads)
+			.help("Number of threads used to run the tests in parallel."))
+		.arg(clap::Arg::with_name("tmp-dir")
+			.short("d")
+			.long("tmp-dir")
+			.takes_value(true)
+			.default_value_os(&sys_tmp_dir)
+			.help("Path to the temporary directory used to store generated data."))
+		.arg(clap::Arg::with_name("mars-path")
+			.short("m")
+			.long("mars-path")
+			.takes_value(true)
+			.default_value("Mars-log.jar")
+			.help("Path to the patched version of MARS."))
+		.arg(clap::Arg::with_name("subject-path")
+			.index(1)
+			.value_name("TEST_SUBJECT")
+			.required(true)
+			.help("Path to the compiled output of iverilog to be tested."))
+		.get_matches();
+	let test_count = matches.value_of("count").unwrap().parse::<u32>().unwrap();
+	let thread_count = matches.value_of("threads").unwrap().parse::<usize>().unwrap();
+	let tmp_dir = matches.value_of_os("tmp-dir").unwrap();
+	let mars_path = matches.value_of_os("mars-path").unwrap();
+	let subject_path = matches.value_of_os("subject-path").unwrap();
 
-	stream::iter(0..test_count).for_each_concurrent(num_cpus::get(), |_| async {
+	stream::iter(0..test_count).for_each_concurrent(thread_count, |_| async {
 		let asm_data = tokio::task::spawn_blocking(|| {
 			let mut rng = rand::thread_rng();
 			let op_dist = Uniform::new_inclusive(0, OP_MAX as u32);
@@ -205,7 +244,7 @@ async fn main() {
 			}
 			asm_data
 		}).await.unwrap();
-		let dir = TempDir::new_in(std::env::temp_dir(), "P5-test").unwrap();
+		let dir = TempDir::new_in(tmp_dir, "co-tester").unwrap();
 		let dir_path = dir.path();
 		let asm_path = dir_path.join("test.asm");
 		let code_path = dir_path.join("code.txt");
@@ -213,8 +252,8 @@ async fn main() {
 		let vvp_log_path = dir_path.join("vvp.log");
 		File::create(&asm_path).await.unwrap().write_all(&asm_data).await.unwrap();
 		let mars_res = Command::new("java")
+			.arg("-jar").arg(mars_path)
 			.args(&[
-				"-jar", "../Mars-log.jar",
 				"nc", "db", "mc", "CompactDataAtZero",
 				"dump", ".text", "HexText", code_path.to_str().unwrap(),
 				asm_path.to_str().unwrap(),
@@ -223,7 +262,7 @@ async fn main() {
 			.output().await.unwrap();
 		assert!(mars_res.status.success());
 		let vvp_res = Command::new("vvp")
-			.arg(std::env::current_dir().unwrap().join("../P5/out/P5"))
+			.arg(std::env::current_dir().unwrap().join(subject_path))
 			.current_dir(dir_path)
 			.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null())
 			.output().await.unwrap();
