@@ -1,12 +1,13 @@
 extern crate clap;
 extern crate futures;
 extern crate num_cpus;
+extern crate strum;
+extern crate strum_macros;
 extern crate tempdir;
 extern crate tokio;
 extern crate rand;
 extern crate rand_distr;
 
-use std::fmt::{Display, Formatter};
 use std::process::Stdio;
 
 use futures::prelude::*;
@@ -15,13 +16,14 @@ use rand::prelude::*;
 
 use rand::distributions::Uniform;
 use rand_distr::Normal;
+use strum::{IntoEnumIterator, VariantNames};
+use strum_macros::{Display, EnumIter, EnumVariantNames};
 use tempdir::TempDir;
 use tokio::fs::File;
 use tokio::process::Command;
 
-#[repr(u32)]
-#[allow(dead_code)]
-#[derive(Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Display, EnumIter, EnumVariantNames)]
+#[strum(serialize_all = "kebab_case")]
 enum Op {
 	Nop,
 	Addu,
@@ -37,25 +39,6 @@ enum Op {
 	Jr,
 }
 
-impl Display for Op {
-	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Op::Nop => write!(f, "nop"),
-			Op::Addu => write!(f, "addu"),
-			Op::Subu => write!(f, "subu"),
-			Op::Andi => write!(f, "andi"),
-			Op::Ori => write!(f, "ori"),
-			Op::Lui => write!(f, "lui"),
-			Op::Lw => write!(f, "lw"),
-			Op::Sw => write!(f, "sw"),
-			Op::Beq => write!(f, "beq"),
-			Op::J => write!(f, "j"),
-			Op::Jal => write!(f, "jal"),
-			Op::Jr => write!(f, "jr"),
-		}
-	}
-}
-
 impl Op {
 	fn is_jump(&self) -> bool {
 		match self {
@@ -65,7 +48,6 @@ impl Op {
 	}
 }
 
-const OP_MAX: Op = Op::Jr;
 const INSTR_COUNT: i32 = 1022;
 
 fn reg_rand_or_last<T: rand::Rng>(x: i32, rng: &mut T, last_written: Option<i32>) -> i32 {
@@ -78,11 +60,13 @@ fn reg_rand_or_last<T: rand::Rng>(x: i32, rng: &mut T, last_written: Option<i32>
 
 #[tokio::main]
 async fn main() {
+	let about_str = format!("Supported instructions: {}", Op::VARIANTS.join(", "));
 	let default_threads = num_cpus::get().to_string();
 	let sys_tmp_dir = std::env::temp_dir().into_os_string();
 	let matches = clap::App::new(env!("CARGO_PKG_NAME"))
 		.version(env!("CARGO_PKG_VERSION"))
 		.author(env!("CARGO_PKG_AUTHORS"))
+		.about(&*about_str)
 		.arg(clap::Arg::with_name("count")
 			.short("c")
 			.long("count")
@@ -122,7 +106,8 @@ async fn main() {
 	stream::iter(0..test_count).for_each_concurrent(thread_count, |_| async {
 		let asm_data = tokio::task::spawn_blocking(|| {
 			let mut rng = rand::thread_rng();
-			let op_dist = Uniform::new_inclusive(0, OP_MAX as u32);
+			let ops = Op::iter().collect::<Vec<_>>();
+			let op_dist = Uniform::new(0, ops.len());
 			let reg_dist = Uniform::new(0, 32);
 			let imm_dist = Uniform::new_inclusive(0, u16::max_value());
 			let mem_addr_dist = Uniform::new(0u16, 1024);
@@ -136,7 +121,7 @@ async fn main() {
 			let mut pending_labels = Vec::new();
 			let mut pending_addrs = Vec::new();
 			loop {
-				let op = unsafe { std::mem::transmute::<_, Op>(rng.sample(op_dist)) };
+				let op = ops[rng.sample(op_dist)];
 				let mut instr_count = 1;
 				let mut rs = rng.sample(reg_dist);
 				let mut rt = rng.sample(reg_dist);
