@@ -258,40 +258,55 @@ async fn main() {
 				"dump", ".text", "HexText", code_path.to_str().unwrap(),
 				asm_path.to_str().unwrap(),
 			])
-			.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null())
+			.stdin(Stdio::null())
 			.output().await.unwrap();
-		assert!(mars_res.status.success());
+		let mars_log = String::from_utf8_lossy(&mars_res.stdout).into_owned();
+		assert!(mars_res.status.success(), "Failed to run MARS.\nstdout:\n{}\nsterr:\n{}", mars_log, String::from_utf8_lossy(&mars_res.stderr));
 		let vvp_res = Command::new("vvp")
 			.arg(std::env::current_dir().unwrap().join(subject_path))
 			.current_dir(dir_path)
-			.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null())
+			.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::inherit())
 			.output().await.unwrap();
-		assert!(mars_res.status.success());
-		let mars_log = String::from_utf8(mars_res.stdout).unwrap();
-		let vvp_log = String::from_utf8(vvp_res.stdout).unwrap();
+		let vvp_log = String::from_utf8_lossy(&vvp_res.stdout).into_owned();
+		assert!(vvp_res.status.success(), "Failed to run the test subject.\nstdout:\n{}\nstderr:\n{}", vvp_log, String::from_utf8_lossy(&vvp_res.stderr));
 		File::create(&mars_log_path).await.unwrap().write_all(mars_log.as_bytes()).await.unwrap();
 		File::create(&vvp_log_path).await.unwrap().write_all(vvp_log.as_bytes()).await.unwrap();
 		let res = tokio::task::spawn_blocking(move || {
 			std::panic::catch_unwind(|| {
-				let mut mars_lines = mars_log.split('\n');
-				for vvp_line in vvp_log.split_terminator('\n') {
-					let pos = if let Some(pos) = vvp_line.find('@') { pos } else { continue; };
-					let mut mars_line;
-					loop {
-						mars_line = mars_lines.next().unwrap();
-						if mars_line.starts_with('@') && !mars_line.contains("$ 0") {
-							break;
-						}
+				let mut mars_reg_lines = Vec::new();
+				let mut mars_mem_lines = Vec::new();
+				for line in mars_log.split('\n') {
+					if !line.starts_with('@') { continue; }
+					if &line[11..12] == "$" {
+						if &line[12..14] == " 0" { continue; }
+						mars_reg_lines.push(line);
+					} else {
+						mars_mem_lines.push(line);
 					}
-					assert_eq!(&vvp_line[pos..vvp_line.len()], mars_line);
 				}
-				for line in mars_lines {
-					assert!(!line.starts_with('@') || line.contains("$ 0"));
+				let mut reg_id = 0;
+				let mut mem_id = 0;
+				for (i, vvp_line) in vvp_log.split('\n').enumerate() {
+					let pos = if let Some(pos) = vvp_line.find('@') { pos } else { continue; };
+					let vvp_line = &vvp_line[pos..vvp_line.len()];
+					let mars_line;
+					if &vvp_line[11..12] == "$" {
+						if &vvp_line[12..14] == " 0" { continue; }
+						mars_line = mars_reg_lines.get(reg_id);
+						reg_id += 1;
+					} else {
+						mars_line = mars_mem_lines.get(mem_id);
+						mem_id += 1;
+					}
+					assert!(mars_line.is_some(), "Got \"{}\" at line {}, but MARS output has ended.", vvp_line, i + 1);
+					assert_eq!(*mars_line.unwrap(), vvp_line, "Unexpected output at line {}.", i + 1);
 				}
+				assert_eq!(mars_reg_lines.len(), reg_id, "Too few register writes, the next expected line is \"{}\".", mars_reg_lines[reg_id]);
+				assert_eq!(mars_mem_lines.len(), mem_id, "Too few memory writes, the next expected line is \"{}\".", mars_mem_lines[mem_id]);
 			})
 		}).await.unwrap();
 		if res.is_err() {
-			println!("Test directory: {}", dir_path.to_string_lossy());
+			println!("Test failed. Relevant files are in {}", dir_path.to_string_lossy());
 			std::process::exit(1);
 		}
 	}).await;
