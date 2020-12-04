@@ -100,6 +100,9 @@ async fn main() {
 			.takes_value(true)
 			.conflicts_with("only-instr")
 			.help("A comma-separated list of instructions that will not be generated."))
+		.arg(clap::Arg::with_name("no-db")
+			.long("no-db")
+			.help("Disable delayed branching."))
 		.arg(clap::Arg::with_name("tmp-dir")
 			.short("d")
 			.long("tmp-dir")
@@ -120,6 +123,7 @@ async fn main() {
 		.get_matches();
 	let test_count = matches.value_of("count").unwrap().parse::<u32>().unwrap();
 	let thread_count = matches.value_of("threads").unwrap().parse::<usize>().unwrap();
+	let no_db = matches.is_present("no-db");
 	let tmp_dir = matches.value_of_os("tmp-dir").unwrap();
 	let mars_path = matches.value_of_os("mars-path").unwrap();
 	let subject_path = matches.value_of_os("subject-path").unwrap();
@@ -282,10 +286,12 @@ async fn main() {
 		let mars_log_path = dir_path.join("mars.log");
 		let vvp_log_path = dir_path.join("vvp.log");
 		File::create(&asm_path).await.unwrap().write_all(&asm_data).await.unwrap();
-		let mars_res = Command::new("java")
-			.arg("-jar").arg(mars_path)
+		let mut mars_cmd = Command::new("java");
+		mars_cmd.arg("-jar").arg(mars_path);
+		if !no_db { mars_cmd.arg("db"); }
+		let mars_res = mars_cmd
 			.args(&[
-				"nc", "db", "mc", "CompactDataAtZero",
+				"nc", "mc", "CompactDataAtZero",
 				"dump", ".text", "HexText", code_path.to_str().unwrap(),
 				asm_path.to_str().unwrap(),
 			])
