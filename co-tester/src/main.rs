@@ -59,7 +59,7 @@ impl Op {
 	}
 }
 
-const INSTR_COUNT: i32 = 1022;
+const INSTR_COUNT: i32 = 1023;
 
 fn reg_rand_or_last<T: rand::Rng>(x: i32, rng: &mut T, last_written: Option<i32>) -> i32 {
 	if let Some(y) = last_written {
@@ -204,7 +204,7 @@ async fn main() {
 							let offset = rng.sample(imm_dist) as i16;
 							let base = addr as i32 - offset as i32;
 							instr_count = if base < 0 { 3 } else { 2 };
-							if pc + instr_count > INSTR_COUNT { continue; }
+							if pc + instr_count >= INSTR_COUNT { continue; }
 							(base, offset)
 						} else {
 							let offset = addr as i16;
@@ -231,20 +231,20 @@ async fn main() {
 						}
 					}
 					Op::Beq => {
-						if pc + 2 > INSTR_COUNT || in_delay_slot { continue; }
-						let must_jump = pc + 3 > INSTR_COUNT && rng.gen_bool(0.5);
+						if pc + 2 >= INSTR_COUNT || in_delay_slot { continue; }
+						let must_jump = pc + 3 >= INSTR_COUNT && rng.gen_bool(0.5);
 						rs = reg_rand_or_last(rs, &mut rng, reg_last_written);
 						rt = if must_jump { rs } else { reg_rand_or_last(rt, &mut rng, reg_last_written) };
 						asm_lines.push(format!("L{}: {} ${}, ${}, L", instr_id, op, rs, rt));
 						pending_labels.push(instr_id);
 					}
 					Op::J | Op::Jal => {
-						if pc + 2 > INSTR_COUNT || in_delay_slot { continue; }
+						if pc + 2 >= INSTR_COUNT || in_delay_slot { continue; }
 						asm_lines.push(format!("L{}: {} L", instr_id, op));
 						pending_labels.push(instr_id);
 					}
 					Op::Jr => {
-						if pc + 3 > INSTR_COUNT { continue; }
+						if pc + 3 >= INSTR_COUNT { continue; }
 						rs = reg_rand_or_last(rs, &mut rng, reg_last_written);
 						if rs == 0 { rs = rng.gen_range(1, 32); }
 						instr_count = 2;
