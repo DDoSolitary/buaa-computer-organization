@@ -65,8 +65,9 @@ module stage_decode(
 	assign ext_imm = lw || sw ? $signed({imm, 16'b0}) >>> 16 : $signed({16'b0, imm});
 	assign mem_write = sw;
 
+	wire [31:0] branch_target = $signed(pc) + $signed({instr[15:0], 2'b0});
 	assign next_pc =
-		beq && grf_read_data0 == grf_read_data1 ? $signed(pc) + $signed({instr[15:0], 2'b0}) :
+		beq && grf_read_data0 == grf_read_data1 ? branch_target :
 		j || jal ? pc[31:28] | {instr[25:0], 2'b0} :
 		jr ? grf_read_data0 : pc + 4;
 endmodule
