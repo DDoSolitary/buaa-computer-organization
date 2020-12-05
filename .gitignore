@@ -11,9 +11,15 @@ test.asm
 _xmsgs/
 iseconfig/
 isim/
-*.gise
+*_isim_beh.exe
+*_isim_beh.wdb
 *_summary.html
+*.gise
 *.prj
 *.xise
 *.xmsgs
+fuse.log
+fuseRelaunch.cmd
+isim.cmd
+isim.log
 xilinxsim.ini
