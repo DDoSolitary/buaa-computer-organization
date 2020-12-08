@@ -180,7 +180,7 @@ async fn main() {
 			}
 			let mut grf_id = 0;
 			let mut mem_id = 0;
-			for (i, subject_line) in subject_log.split('\n').enumerate() {
+			for (i, subject_line) in subject_log.lines().enumerate() {
 				match subject_line.parse::<LogEntry>() {
 					Ok(LogEntry::Grf(grf_entry)) => {
 						if let Some(std_entry) = machine.grf_log().get(grf_id) {
