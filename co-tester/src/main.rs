@@ -22,6 +22,7 @@ use std::fmt::{self, Display, Formatter};
 use std::process::Stdio;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use futures::prelude::*;
 use tokio::prelude::*;
@@ -128,8 +129,12 @@ async fn main() {
 	};
 	let instr_set = Arc::new(instr_set);
 
+	let success_count = AtomicU32::new(0);
+	let failure_count = AtomicU32::new(0);
+
 	let (cancel_tx, cancel_rx) = oneshot::channel();
 	let cancel_tx = RefCell::new(Some(cancel_tx));
+
 	let fut = stream::iter(0..test_count).for_each_concurrent(thread_count, |_| async {
 		let instr_set = Arc::clone(&instr_set);
 		let dir = tempfile::Builder::new().prefix("co-tester-").tempdir_in(tmp_dir).unwrap();
@@ -226,13 +231,24 @@ async fn main() {
 		}).await.unwrap();
 		if let Err(e) = res {
 			println!("{}", e);
-			println!("Relevant files are in {}", dir.into_path().to_string_lossy());
+			println!("Relevant files are in {}\n", dir.into_path().to_string_lossy());
+			failure_count.fetch_add(1, Ordering::Relaxed);
 			if fail_fast {
 				if let Some(cancel_tx) = cancel_tx.borrow_mut().take() {
 					cancel_tx.send(()).unwrap();
 				}
 			}
+		} else {
+			success_count.fetch_add(1, Ordering::Relaxed);
 		}
 	});
 	future::select(fut, cancel_rx).await;
+	let success_count = success_count.load(Ordering::Relaxed);
+	let failure_count = failure_count.load(Ordering::Relaxed);
+	println!(
+		"{} succeeded, {} failed, {} canceled",
+		success_count,
+		failure_count,
+		test_count - success_count - failure_count
+	);
 }
