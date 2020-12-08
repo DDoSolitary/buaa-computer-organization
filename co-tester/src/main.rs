@@ -15,6 +15,7 @@ mod gen;
 mod log;
 mod machine;
 
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
@@ -24,6 +25,7 @@ use std::sync::Arc;
 
 use futures::prelude::*;
 use tokio::prelude::*;
+use futures::channel::oneshot;
 use strum::{AsStaticRef, IntoEnumIterator, VariantNames};
 use tokio::fs::File;
 use tokio::process::Command;
@@ -126,7 +128,9 @@ async fn main() {
 	};
 	let instr_set = Arc::new(instr_set);
 
-	stream::iter(0..test_count).for_each_concurrent(thread_count, |_| async {
+	let (cancel_tx, cancel_rx) = oneshot::channel();
+	let cancel_tx = RefCell::new(Some(cancel_tx));
+	let fut = stream::iter(0..test_count).for_each_concurrent(thread_count, |_| async {
 		let instr_set = Arc::clone(&instr_set);
 		let dir = tempfile::Builder::new().prefix("co-tester-").tempdir_in(tmp_dir).unwrap();
 		let dir_path = dir.path();
@@ -224,8 +228,11 @@ async fn main() {
 			println!("{}", e);
 			println!("Relevant files are in {}", dir.into_path().to_string_lossy());
 			if fail_fast {
-				std::process::exit(1);
+				if let Some(cancel_tx) = cancel_tx.borrow_mut().take() {
+					cancel_tx.send(()).unwrap();
+				}
 			}
 		}
-	}).await;
+	});
+	future::select(fut, cancel_rx).await;
 }
