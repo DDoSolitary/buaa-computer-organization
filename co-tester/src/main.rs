@@ -19,6 +19,7 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
+use std::pin::Pin;
 use std::process::Stdio;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -30,6 +31,7 @@ use futures::channel::oneshot;
 use strum::{AsStaticRef, IntoEnumIterator, VariantNames};
 use tokio::fs::File;
 use tokio::process::Command;
+use tokio::signal::unix::{SignalKind, signal};
 
 use gen::{InstructionType, InstructionGenerator};
 use log::LogEntry;
@@ -242,13 +244,22 @@ async fn main() {
 			success_count.fetch_add(1, Ordering::Relaxed);
 		}
 	});
-	future::select(fut, cancel_rx).await;
+	let mut sighup = signal(SignalKind::hangup()).unwrap();
+	let mut sigint = signal(SignalKind::interrupt()).unwrap();
+	let mut sigterm = signal(SignalKind::terminate()).unwrap();
+	future::select_all(vec![
+		Box::pin(fut) as Pin<Box<dyn Future<Output = ()>>>,
+		Box::pin(cancel_rx.map(|_| ())),
+		Box::pin(sighup.recv().map(|_| ())),
+		Box::pin(sigint.recv().map(|_| ())),
+		Box::pin(sigterm.recv().map(|_| ())),
+	]).await;
 	let success_count = success_count.load(Ordering::Relaxed);
 	let failure_count = failure_count.load(Ordering::Relaxed);
 	println!(
 		"{} succeeded, {} failed, {} canceled",
 		success_count,
 		failure_count,
-		test_count - success_count - failure_count
+		test_count - success_count - failure_count,
 	);
 }
