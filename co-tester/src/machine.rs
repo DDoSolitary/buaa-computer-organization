@@ -72,9 +72,11 @@ impl MipsMachine {
 			}
 			MachineState::InDelaySlot(target) => {
 				debug_assert!(self.delayed_branching);
-				debug_assert_eq!(instr.execute_on(self), BranchResult::None);
+				let res = instr.execute_on(self);
+				debug_assert_eq!(res, BranchResult::None);
 				if target == self.pc {
-					debug_assert_eq!(instr.execute_on(self), BranchResult::None);
+					let res = instr.execute_on(self);
+					debug_assert_eq!(res, BranchResult::None);
 				}
 				self.pc += WORD_SIZE as u32;
 				if target <= self.pc {
