@@ -30,6 +30,10 @@ pub enum InstructionType {
 	Lui,
 	Lw,
 	Sw,
+	Slt,
+	Slti,
+	Sltu,
+	Sltiu,
 	Beq,
 	Bne,
 	Blez,
@@ -238,6 +242,26 @@ impl Iterator for InstructionGenerator<'_> {
 				rs: self.gen_grf_read_addr(None),
 				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
+			}),
+			InstructionType::Slt => Box::new(SltInstr {
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
+				rd: self.rng.sample(&self.grf_addr_dist),
+			}),
+			InstructionType::Slti => Box::new(SltiInstr {
+				rs: self.gen_grf_read_addr(None),
+				rt: self.rng.sample(&self.grf_addr_dist),
+				imm: self.rng.sample(&self.imm_dist) as i16,
+			}),
+			InstructionType::Sltu => Box::new(SltuInstr {
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
+				rd: self.rng.sample(&self.grf_addr_dist),
+			}),
+			InstructionType::Sltiu => Box::new(SltiuInstr {
+				rs: self.gen_grf_read_addr(None),
+				rt: self.rng.sample(&self.grf_addr_dist),
+				imm: self.rng.sample(&self.imm_dist) as i16,
 			}),
 			InstructionType::And => Box::new(AndInstr {
 				rs: self.gen_grf_read_addr(None),

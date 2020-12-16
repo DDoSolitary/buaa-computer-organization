@@ -21,3 +21,5 @@
 `define ALU_OP_SLL 6
 `define ALU_OP_SRL 7
 `define ALU_OP_SRA 8
+`define ALU_OP_SLT 9
+`define ALU_OP_SLTU 10

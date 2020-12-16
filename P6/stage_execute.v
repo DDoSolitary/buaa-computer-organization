@@ -20,6 +20,7 @@ module stage_execute(
 	wire [32:0] add_result = ext_in0 + ext_in1;
 	wire [32:0] sub_result = ext_in0 - ext_in1;
 	wire [31:0] sra_result = $signed(in1) >>> in0[4:0];
+	wire [31:0] slt_result = $signed(in0) < $signed(in1);
 
 	assign overflowed =
 		alu_op == `ALU_OP_ADD && add_result[32] != add_result[31] ||
@@ -34,5 +35,7 @@ module stage_execute(
 		alu_op == `ALU_OP_NOR ? ~(in0 | in1) :
 		alu_op == `ALU_OP_SLL ? in1 << in0[4:0] :
 		alu_op == `ALU_OP_SRL ? in1 >> in0[4:0] :
-		alu_op == `ALU_OP_SRA ? sra_result : 0;
+		alu_op == `ALU_OP_SRA ? sra_result :
+		alu_op == `ALU_OP_SLT ? slt_result :
+		alu_op == `ALU_OP_SLTU ? in0 < in1 : 0;
 endmodule

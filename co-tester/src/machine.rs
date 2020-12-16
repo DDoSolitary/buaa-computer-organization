@@ -471,6 +471,114 @@ impl Instruction for SravInstr {
 }
 
 #[derive(Debug, Copy, Clone)]
+pub struct SltInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub rd: u8,
+}
+
+impl Display for SltInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "slt ${}, ${}, ${}", self.rd, self.rs, self.rt)
+	}
+}
+
+impl Instruction for SltInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, self.rd, 0, 0b101010)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(
+			self.rd,
+			((machine.read_grf(self.rs) as i32) < machine.read_grf(self.rt) as i32) as u32,
+		);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SltiInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub imm: i16,
+}
+
+impl Display for SltiInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "slti ${}, ${}, {}", self.rt, self.rs, self.imm)
+	}
+}
+
+impl Instruction for SltiInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b001010, self.rs, self.rt, self.imm as u16)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(
+			self.rt,
+			((machine.read_grf(self.rs) as i32) < self.imm as i32) as u32,
+		);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SltuInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub rd: u8,
+}
+
+impl Display for SltuInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "sltu ${}, ${}, ${}", self.rd, self.rs, self.rt)
+	}
+}
+
+impl Instruction for SltuInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, self.rd, 0, 0b101011)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(
+			self.rd,
+			(machine.read_grf(self.rs) < machine.read_grf(self.rt)) as u32,
+		);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SltiuInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub imm: i16,
+}
+
+impl Display for SltiuInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "sltiu ${}, ${}, {}", self.rt, self.rs, self.imm)
+	}
+}
+
+impl Instruction for SltiuInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b001011, self.rs, self.rt, self.imm as u16)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(
+			self.rt,
+			(machine.read_grf(self.rs) < self.imm as i32 as u32) as u32,
+		);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
 pub struct AndInstr {
 	pub rs: u8,
 	pub rt: u8,
