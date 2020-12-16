@@ -54,22 +54,23 @@ module stage_decode(
 	wire j = op == 6'b000010;
 	wire jal = op == 6'b000011;
 	wire jr = op_sp && func == 6'b001000;
+	wire jalr = op_sp && func == 6'b001001;
 
 	assign grf_read_addr0 = rs_addr;
 	assign grf_read_addr1 = rt_addr;
 	assign grf_read_stage0 =
-		beq || jr ? `STAGE_DECODE :
+		beq || jr || jalr ? `STAGE_DECODE :
 		add || addi || addu || addiu || sub || subu || sllv || srlv || srav || _and || andi || _or || ori || _xor || xori || _nor || lw || sw ? `STAGE_EXECUTE : `STAGE_MAX;
 	assign grf_read_stage1 =
 		beq ? `STAGE_DECODE :
 		add || addu || sub || subu || sll || sllv || srl || srlv || sra || srav || _and || _or || _xor || _nor ? `STAGE_EXECUTE :
 		sw ? `STAGE_MEM : `STAGE_MAX;
 	assign grf_write_addr =
-		add || addu || sub || subu || sll || sllv || srl || srlv || sra || srav || _and || _or|| _xor || _nor ? rd_addr :
+		add || addu || sub || subu || sll || sllv || srl || srlv || sra || srav || _and || _or|| _xor || _nor || jalr ? rd_addr :
 		addi || addiu || andi || ori || xori || lw || lui ? rt_addr :
 		jal ? 31 : 0;
 	assign grf_write_stage =
-		jal ? `STAGE_DECODE :
+		jal || jalr ? `STAGE_DECODE :
 		add || addi || addu || addiu || sub || subu || sll || sllv || srl || srlv || sra || srav || _and || andi || _or || ori || _xor || xori || _nor || lui ? `STAGE_EXECUTE :
 		lw ? `STAGE_MEM : 0;
 	assign alu_src0 =
@@ -95,5 +96,5 @@ module stage_decode(
 	assign next_pc =
 		beq && grf_read_data0 == grf_read_data1 ? branch_target :
 		j || jal ? pc[31:28] | {instr[25:0], 2'b0} :
-		jr ? grf_read_data0 : pc + 4;
+		jr || jalr ? grf_read_data0 : pc + 4;
 endmodule

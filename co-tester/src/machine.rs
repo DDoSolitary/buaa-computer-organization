@@ -830,3 +830,26 @@ impl Instruction for JrInstr {
 		BranchResult::Yes(machine.read_grf(self.rs))
 	}
 }
+
+pub struct JalrInstr {
+	pub rs: u8,
+	pub rd: u8,
+}
+
+impl Display for JalrInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "jalr ${}, ${}", self.rd, self.rs)
+	}
+}
+
+impl Instruction for JalrInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, 0, self.rd, 0, 0b001001)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		debug_assert_ne!(self.rs, self.rd);
+		machine.write_grf(self.rd, machine.pc() + WORD_SIZE as u32 * 2);
+		BranchResult::Yes(machine.read_grf(self.rs))
+	}
+}

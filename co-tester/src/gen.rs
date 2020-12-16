@@ -34,11 +34,12 @@ pub enum InstructionType {
 	J,
 	Jal,
 	Jr,
+	Jalr,
 }
 
 impl InstructionType {
 	fn is_branch(&self) -> bool {
-		matches!(self, Self::Beq | Self::J | Self::Jal | Self::Jr)
+		matches!(self, Self::Beq | Self::J | Self::Jal | Self::Jr | Self::Jalr)
 	}
 }
 
@@ -59,6 +60,7 @@ pub struct InstructionGenerator<'a> {
 	text_limit: u32,
 	rng: ThreadRng,
 	grf_addr_dist: Uniform<u8>,
+	grf_addr_excluded_dist: Uniform<u8>,
 	mem_addr_dist: Uniform<u32>,
 	imm_dist: Uniform<u16>,
 	branch_dist: Normal<f64>,
@@ -75,6 +77,7 @@ impl<'a> InstructionGenerator<'a> {
 			text_limit: TEXT_START_ADDR + instr_count * WORD_SIZE as u32,
 			rng: rand::thread_rng(),
 			grf_addr_dist: Uniform::new(0, GRF_SIZE as u8),
+			grf_addr_excluded_dist: Uniform::new(0, GRF_SIZE as u8 - 1),
 			mem_addr_dist: Uniform::new(0, (MEM_SIZE * WORD_SIZE) as u32),
 			imm_dist: Uniform::new_inclusive(0, u16::max_value()),
 			branch_dist: Normal::new(0f64, 5f64).unwrap(),
@@ -85,10 +88,16 @@ impl<'a> InstructionGenerator<'a> {
 		self.machine.grf_log().last().map(|log| log.addr())
 	}
 
-	fn gen_grf_read_addr(&mut self) -> u8 {
+	fn gen_grf_read_addr(&mut self, exclude_addr: Option<u8>) -> u8 {
 		let last_written = self.grf_last_written();
 		if let (Some(last_written), true) = (last_written, self.rng.gen_bool(0.5)) {
-			last_written
+			if exclude_addr != Some(last_written) {
+				return last_written;
+			}
+		}
+		if let Some(exclude_addr) = exclude_addr {
+			let addr = self.rng.sample(&self.grf_addr_excluded_dist);
+			if addr >= exclude_addr { addr + 1 } else { addr }
 		} else {
 			self.rng.sample(&self.grf_addr_dist)
 		}
@@ -156,7 +165,7 @@ impl Iterator for InstructionGenerator<'_> {
 			_ => {
 				if jr_candidates.is_empty() {
 					let instr_set = self.instr_set.iter()
-						.filter(|x| !matches!(x, InstructionType::Jr)).collect::<Vec<_>>();
+						.filter(|x| !matches!(x, InstructionType::Jr | InstructionType::Jalr)).collect::<Vec<_>>();
 					**self.rng.rand_select(&instr_set)
 				} else {
 					*self.rng.rand_select(self.instr_set)
@@ -166,98 +175,98 @@ impl Iterator for InstructionGenerator<'_> {
 		let instr: Box<dyn Instruction> = match instr_type {
 			InstructionType::Nop => Box::new(NopInstr),
 			InstructionType::Add => Box::new(AddInstr {
-				rs: self.gen_grf_read_addr(),
-				rt: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
 			}),
 			InstructionType::Addi => Box::new(AddiInstr {
-				rs: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
 				rt: self.rng.sample(&self.grf_addr_dist),
 				imm: self.rng.sample(&self.imm_dist) as i16,
 			}),
 			InstructionType::Addu => Box::new(AdduInstr {
-				rs: self.gen_grf_read_addr(),
-				rt: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
 			}),
 			InstructionType::Addiu => Box::new(AddiuInstr {
-				rs: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
 				rt: self.rng.sample(&self.grf_addr_dist),
 				imm: self.rng.sample(&self.imm_dist),
 			}),
 			InstructionType::Sub => Box::new(SubInstr {
-				rs: self.gen_grf_read_addr(),
-				rt: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
 			}),
 			InstructionType::Subu => Box::new(SubuInstr {
-				rs: self.gen_grf_read_addr(),
-				rt: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
 			}),
 			InstructionType::Sll => Box::new(SllInstr {
-				rt: self.gen_grf_read_addr(),
+				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
 				sa: self.rng.gen_range(0, 32),
 			}),
 			InstructionType::Sllv => Box::new(SllvInstr {
-				rs: self.gen_grf_read_addr(),
-				rt: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
 			}),
 			InstructionType::Srl => Box::new(SrlInstr {
-				rt: self.gen_grf_read_addr(),
+				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
 				sa: self.rng.gen_range(0, 32),
 			}),
 			InstructionType::Srlv => Box::new(SrlvInstr {
-				rs: self.gen_grf_read_addr(),
-				rt: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
 			}),
 			InstructionType::Sra => Box::new(SraInstr {
-				rt: self.gen_grf_read_addr(),
+				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
 				sa: self.rng.gen_range(0, 32),
 			}),
 			InstructionType::Srav => Box::new(SravInstr {
-				rs: self.gen_grf_read_addr(),
-				rt: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
 			}),
 			InstructionType::And => Box::new(AndInstr {
-				rs: self.gen_grf_read_addr(),
-				rt: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
 			}),
 			InstructionType::Andi => Box::new(AndiInstr {
-				rs: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
 				rt: self.rng.sample(&self.grf_addr_dist),
 				imm: self.rng.sample(&self.imm_dist),
 			}),
 			InstructionType::Or => Box::new(OrInstr {
-				rs: self.gen_grf_read_addr(),
-				rt: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
 			}),
 			InstructionType::Ori => Box::new(OriInstr {
-				rs: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
 				rt: self.rng.sample(&self.grf_addr_dist),
 				imm: self.rng.sample(&self.imm_dist),
 			}),
 			InstructionType::Xor => Box::new(XorInstr {
-				rs: self.gen_grf_read_addr(),
-				rt: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
 			}),
 			InstructionType::Xori => Box::new(XoriInstr {
-				rs: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
 				rt: self.rng.sample(&self.grf_addr_dist),
 				imm: self.rng.sample(&self.imm_dist),
 			}),
 			InstructionType::Nor => Box::new(NorInstr {
-				rs: self.gen_grf_read_addr(),
-				rt: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
 			}),
 			InstructionType::Lui => Box::new(LuiInstr {
@@ -266,10 +275,11 @@ impl Iterator for InstructionGenerator<'_> {
 			}),
 			InstructionType::Lw => {
 				let (base, offset) = self.gen_base_and_offset(!0b11);
-				let mut rt = self.gen_grf_read_addr();
-				if self.machine.state() == MachineState::InDelaySlot(self.machine.pc()) {
-					while base == rt { rt = self.gen_grf_read_addr(); }
-				}
+				let rt = if self.machine.state() == MachineState::InDelaySlot(self.machine.pc()) {
+					self.gen_grf_read_addr(Some(base))
+				} else {
+					self.gen_grf_read_addr(None)
+				};
 				Box::new(LwInstr {
 					base,
 					rt,
@@ -278,10 +288,6 @@ impl Iterator for InstructionGenerator<'_> {
 			}
 			InstructionType::Sw => {
 				let (base, offset) = self.gen_base_and_offset(!0b11);
-				let mut rt = self.gen_grf_read_addr();
-				if self.machine.state() == MachineState::InDelaySlot(self.machine.pc()) {
-					while base == rt { rt = self.gen_grf_read_addr(); }
-				}
 				Box::new(SwInstr {
 					base,
 					rt: self.rng.sample(&self.grf_addr_dist),
@@ -289,8 +295,8 @@ impl Iterator for InstructionGenerator<'_> {
 				})
 			}
 			InstructionType::Beq => Box::new(BeqInstr {
-				rs: self.gen_grf_read_addr(),
-				rt: self.gen_grf_read_addr(),
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
 				offset: self.gen_branch_offset(),
 			}),
 			InstructionType::J => Box::new(JInstr {
@@ -302,6 +308,13 @@ impl Iterator for InstructionGenerator<'_> {
 			InstructionType::Jr => Box::new(JrInstr {
 				rs: *self.rng.rand_select(&jr_candidates),
 			}),
+			InstructionType::Jalr => {
+				let rs = *self.rng.rand_select(&jr_candidates);
+				Box::new(JalrInstr {
+					rs,
+					rd: self.gen_grf_read_addr(Some(rs)),
+				})
+			},
 		};
 		self.machine.execute(&*instr);
 		Some(instr)
