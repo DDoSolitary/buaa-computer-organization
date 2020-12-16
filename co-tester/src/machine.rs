@@ -219,6 +219,180 @@ impl Instruction for SubuInstr {
 }
 
 #[derive(Debug, Copy, Clone)]
+pub struct SllInstr {
+	pub rt: u8,
+	pub rd: u8,
+	pub sa: u8,
+}
+
+impl Display for SllInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "sll ${}, ${}, {}", self.rd, self.rt, self.sa)
+	}
+}
+
+impl Instruction for SllInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, 0, self.rt, self.rd, self.sa, 0b000000)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(self.rd, machine.read_grf(self.rt) << self.sa);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SllvInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub rd: u8,
+}
+
+impl Display for SllvInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "sllv ${}, ${}, ${}", self.rd, self.rt, self.rs)
+	}
+}
+
+impl Instruction for SllvInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, self.rd, 0, 0b000100)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(self.rd, machine.read_grf(self.rt) << machine.read_grf(self.rs));
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SrlInstr {
+	pub rt: u8,
+	pub rd: u8,
+	pub sa: u8,
+}
+
+impl Display for SrlInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "srl ${}, ${}, {}", self.rd, self.rt, self.sa)
+	}
+}
+
+impl Instruction for SrlInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, 0, self.rt, self.rd, self.sa, 0b000010)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(self.rd, machine.read_grf(self.rt) >> self.sa);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SrlvInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub rd: u8,
+}
+
+impl Display for SrlvInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "srlv ${}, ${}, ${}", self.rd, self.rt, self.rs)
+	}
+}
+
+impl Instruction for SrlvInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, self.rd, 0, 0b000110)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(self.rd, machine.read_grf(self.rt) >> machine.read_grf(self.rs));
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SraInstr {
+	pub rt: u8,
+	pub rd: u8,
+	pub sa: u8,
+}
+
+impl Display for SraInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "sra ${}, ${}, {}", self.rd, self.rt, self.sa)
+	}
+}
+
+impl Instruction for SraInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, 0, self.rt, self.rd, self.sa, 0b000011)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(self.rd, (machine.read_grf(self.rt) as i32 >> self.sa) as u32);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SravInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub rd: u8,
+}
+
+impl Display for SravInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "srav ${}, ${}, ${}", self.rd, self.rt, self.rs)
+	}
+}
+
+impl Instruction for SravInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, self.rd, 0, 0b000111)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(
+			self.rd,
+			(machine.read_grf(self.rt) as i32 >> machine.read_grf(self.rs)) as u32
+		);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct AndInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub rd: u8,
+}
+
+impl Display for AndInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "and ${}, ${}, ${}", self.rd, self.rs, self.rt)
+	}
+}
+
+impl Instruction for AndInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, self.rd, 0, 0b100100)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(
+			self.rd,
+			machine.read_grf(self.rs) & machine.read_grf(self.rt),
+		);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
 pub struct AndiInstr {
 	pub rs: u8,
 	pub rt: u8,
@@ -246,6 +420,33 @@ impl Instruction for AndiInstr {
 }
 
 #[derive(Debug, Copy, Clone)]
+pub struct OrInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub rd: u8,
+}
+
+impl Display for OrInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "or ${}, ${}, ${}", self.rd, self.rs, self.rt)
+	}
+}
+
+impl Instruction for OrInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, self.rd, 0, 0b100101)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(
+			self.rd,
+			machine.read_grf(self.rs) | machine.read_grf(self.rt),
+		);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
 pub struct OriInstr {
 	pub rs: u8,
 	pub rt: u8,
@@ -267,6 +468,87 @@ impl Instruction for OriInstr {
 		machine.write_grf(
 			self.rt,
 			machine.read_grf(self.rs) | self.imm as u32,
+		);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct XorInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub rd: u8,
+}
+
+impl Display for XorInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "xor ${}, ${}, ${}", self.rd, self.rs, self.rt)
+	}
+}
+
+impl Instruction for XorInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, self.rd, 0, 0b100110)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(
+			self.rd,
+			machine.read_grf(self.rs) ^ machine.read_grf(self.rt),
+		);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct XoriInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub imm: u16,
+}
+
+impl Display for XoriInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "xori ${}, ${}, {}", self.rt, self.rs, self.imm)
+	}
+}
+
+impl Instruction for XoriInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b001110, self.rs, self.rt, self.imm)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(
+			self.rt,
+			machine.read_grf(self.rs) ^ self.imm as u32,
+		);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct NorInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub rd: u8,
+}
+
+impl Display for NorInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "nor ${}, ${}, ${}", self.rd, self.rs, self.rt)
+	}
+}
+
+impl Instruction for NorInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, self.rd, 0, 0b100111)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(
+			self.rd,
+			!(machine.read_grf(self.rs) | machine.read_grf(self.rt)),
 		);
 		BranchResult::None
 	}
