@@ -8,7 +8,11 @@ use super::machine::*;
 #[strum(serialize_all = "kebab_case")]
 pub enum InstructionType {
 	Nop,
+	Add,
+	Addi,
 	Addu,
+	Addiu,
+	Sub,
 	Subu,
 	Sll,
 	Sllv,
@@ -161,7 +165,27 @@ impl Iterator for InstructionGenerator<'_> {
 		};
 		let instr: Box<dyn Instruction> = match instr_type {
 			InstructionType::Nop => Box::new(NopInstr),
+			InstructionType::Add => Box::new(AddInstr {
+				rs: self.gen_grf_read_addr(),
+				rt: self.gen_grf_read_addr(),
+				rd: self.rng.sample(&self.grf_addr_dist),
+			}),
+			InstructionType::Addi => Box::new(AddiInstr {
+				rs: self.gen_grf_read_addr(),
+				rt: self.rng.sample(&self.grf_addr_dist),
+				imm: self.rng.sample(&self.imm_dist) as i16,
+			}),
 			InstructionType::Addu => Box::new(AdduInstr {
+				rs: self.gen_grf_read_addr(),
+				rt: self.gen_grf_read_addr(),
+				rd: self.rng.sample(&self.grf_addr_dist),
+			}),
+			InstructionType::Addiu => Box::new(AddiuInstr {
+				rs: self.gen_grf_read_addr(),
+				rt: self.rng.sample(&self.grf_addr_dist),
+				imm: self.rng.sample(&self.imm_dist),
+			}),
+			InstructionType::Sub => Box::new(SubInstr {
 				rs: self.gen_grf_read_addr(),
 				rt: self.gen_grf_read_addr(),
 				rd: self.rng.sample(&self.grf_addr_dist),

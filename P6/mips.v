@@ -10,10 +10,12 @@ module mips(
 	wire [31:0] grf_read_data0, grf_read_data1, d_read_data0, d_read_data1, d_ext_imm, d_next_pc;
 	wire [1:0] d_read_stage0, d_read_stage1, d_write_stage;
 	wire [`ALU_OP_LEN - 1:0] d_alu_op;
-	wire d_alu_src0, d_alu_src1, d_mem_write;
+	wire d_alu_src0, d_alu_src1, d_mem_write, d_check_overflow;
 	wire [4:0] d_sa;
 
+	wire [4:0] e_write_addr;
 	wire [31:0] e_read_data0, e_read_data1, e_alu_result, e_write_data;
+	wire e_overflowed;
 
 	wire [31:0] m_read_data, m_mem_read_data, m_write_data;
 
@@ -24,7 +26,7 @@ module mips(
 	reg [31:0] de_read_data0, de_read_data1, de_write_data, de_ext_imm;
 	reg [1:0] de_write_stage;
 	reg [`ALU_OP_LEN - 1:0] de_alu_op;
-	reg de_alu_src0, de_alu_src1, de_mem_write;
+	reg de_alu_src0, de_alu_src1, de_mem_write, de_check_overflow;
 	reg [4:0] de_sa;
 
 	reg [31:0] em_pc;
@@ -37,24 +39,25 @@ module mips(
 	reg [4:0] mw_write_addr;
 	reg [31:0] mw_write_data;
 
+	assign e_write_addr = de_check_overflow && e_overflowed ? 0 : de_write_addr;
 	assign e_write_data = de_write_stage == `STAGE_EXECUTE ? e_alu_result : de_write_data;
 	assign m_write_data = em_write_stage == `STAGE_MEM ? m_mem_read_data : em_write_data;
 
 	assign d_read_data0 =
 		d_read_addr0 == 0 ? 0 :
-		d_read_addr0 == de_write_addr ? de_write_data :
-		d_read_addr0 == em_write_addr ? em_write_data : grf_read_data0;
+		d_read_addr0 == de_write_addr && de_write_stage <= `STAGE_DECODE ? de_write_data :
+		d_read_addr0 == em_write_addr && em_write_stage <= `STAGE_EXECUTE ? em_write_data : grf_read_data0;
 	assign d_read_data1 =
 		d_read_addr1 == 0 ? 0 :
-		d_read_addr1 == de_write_addr ? de_write_data :
-		d_read_addr1 == em_write_addr ? em_write_data : grf_read_data1;
+		d_read_addr1 == de_write_addr && de_write_stage <= `STAGE_DECODE ? de_write_data :
+		d_read_addr1 == em_write_addr && em_write_stage <= `STAGE_EXECUTE ? em_write_data : grf_read_data1;
 	assign e_read_data0 =
 		de_read_addr0 == 0 ? 0 :
-		de_read_addr0 == em_write_addr ? em_write_data :
+		de_read_addr0 == em_write_addr && em_write_stage <= `STAGE_EXECUTE ? em_write_data :
 		de_read_addr0 == mw_write_addr ? mw_write_data : de_read_data0;
 	assign e_read_data1 =
 		de_read_addr1 == 0 ? 0 :
-		de_read_addr1 == em_write_addr ? em_write_data :
+		de_read_addr1 == em_write_addr && em_write_stage <= `STAGE_EXECUTE ? em_write_data :
 		de_read_addr1 == mw_write_addr ? mw_write_data : de_read_data1;
 	assign m_read_data =
 		em_read_addr == 0 ? 0 :
@@ -91,7 +94,7 @@ module mips(
 		.grf_write_addr(d_write_addr), .grf_write_stage(d_write_stage),
 		.alu_src0(d_alu_src0), .alu_src1(d_alu_src1), .alu_op(d_alu_op),
 		.sa(d_sa), .ext_imm(d_ext_imm),
-		.mem_write(d_mem_write),
+		.mem_write(d_mem_write), .check_overflow(d_check_overflow),
 		.next_pc(d_next_pc)
 	);
 
@@ -99,7 +102,7 @@ module mips(
 		.grf_in0(e_read_data0), .grf_in1(e_read_data1),
 		.alu_src0(de_alu_src0), .alu_src1(de_alu_src1), .alu_op(de_alu_op),
 		.sa(de_sa), .ext_imm(de_ext_imm),
-		.alu_result(e_alu_result)
+		.alu_result(e_alu_result), .overflowed(e_overflowed)
 	);
 
 	stage_mem stage_mem(
@@ -128,6 +131,7 @@ module mips(
 			de_sa <= 0;
 			de_ext_imm <= 0;
 			de_mem_write <= 0;
+			de_check_overflow <= 0;
 			em_pc <= 0;
 			em_read_addr <= 0;
 			em_read_data <= 0;
@@ -158,10 +162,11 @@ module mips(
 			de_sa <= d_sa;
 			de_ext_imm <= d_ext_imm;
 			de_mem_write <= !stall && d_mem_write;
+			de_check_overflow <= !stall && d_check_overflow;
 			em_pc <= de_pc;
 			em_read_addr <= de_read_addr1;
 			em_read_data <= e_read_data1;
-			em_write_addr <= de_write_addr;
+			em_write_addr <= e_write_addr;
 			em_write_data <= e_write_data;
 			em_write_stage <= de_write_stage;
 			em_mem_write <= de_mem_write;

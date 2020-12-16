@@ -17,6 +17,7 @@ module stage_decode(
 	output wire [4:0] sa,
 	output wire [31:0] ext_imm,
 	output wire mem_write,
+	output wire check_overflow,
 	output wire [31:0] next_pc
 );
 	wire [5:0] op = instr[31:26];
@@ -27,7 +28,11 @@ module stage_decode(
 	wire [5:0] func = instr[5:0];
 
 	wire op_sp = op == 6'b000000;
+	wire add = op_sp && func == 6'b100000;
+	wire addi = op == 6'b001000;
 	wire addu = op_sp && func == 6'b100001;
+	wire addiu = op == 6'b001001;
+	wire sub = op_sp && func == 6'b100010;
 	wire subu = op_sp && func == 6'b100011;
 	wire sll = op_sp && func == 6'b000000;
 	wire sllv = op_sp && func == 6'b000100;
@@ -54,26 +59,26 @@ module stage_decode(
 	assign grf_read_addr1 = rt_addr;
 	assign grf_read_stage0 =
 		beq || jr ? `STAGE_DECODE :
-		addu || subu || sllv || srlv || srav || _and || andi || _or || ori || _xor || xori || _nor || lw || sw ? `STAGE_EXECUTE : `STAGE_MAX;
+		add || addi || addu || addiu || sub || subu || sllv || srlv || srav || _and || andi || _or || ori || _xor || xori || _nor || lw || sw ? `STAGE_EXECUTE : `STAGE_MAX;
 	assign grf_read_stage1 =
 		beq ? `STAGE_DECODE :
-		addu || subu || sll || sllv || srl || srlv || sra || srav || _and || _or || _xor || _nor ? `STAGE_EXECUTE :
+		add || addu || sub || subu || sll || sllv || srl || srlv || sra || srav || _and || _or || _xor || _nor ? `STAGE_EXECUTE :
 		sw ? `STAGE_MEM : `STAGE_MAX;
 	assign grf_write_addr =
-		addu || subu || sll || sllv || srl || srlv || sra || srav || _and || _or|| _xor || _nor ? rd_addr :
-		andi || ori || xori || lw || lui ? rt_addr :
+		add || addu || sub || subu || sll || sllv || srl || srlv || sra || srav || _and || _or|| _xor || _nor ? rd_addr :
+		addi || addiu || andi || ori || xori || lw || lui ? rt_addr :
 		jal ? 31 : 0;
 	assign grf_write_stage =
 		jal ? `STAGE_DECODE :
-		addu || subu || sll || sllv || srl || srlv || sra || srav || _and || andi || _or || ori || _xor || xori || _nor || lui ? `STAGE_EXECUTE :
+		add || addi || addu || addiu || sub || subu || sll || sllv || srl || srlv || sra || srav || _and || andi || _or || ori || _xor || xori || _nor || lui ? `STAGE_EXECUTE :
 		lw ? `STAGE_MEM : 0;
 	assign alu_src0 =
 		lui || sll || srl || sra ? `ALU_SRC0_SA : `ALU_SRC0_RS;
 	assign alu_src1 =
-		andi || ori || xori || lw || sw || lui ? `ALU_SRC1_EXT : `ALU_SRC1_RT;
+		addi || addiu || andi || ori || xori || lw || sw || lui ? `ALU_SRC1_EXT : `ALU_SRC1_RT;
 	assign alu_op =
-		addu || lw || sw ? `ALU_OP_ADD :
-		subu ? `ALU_OP_SUB :
+		add || addi || addu || addiu || lw || sw ? `ALU_OP_ADD :
+		sub || subu ? `ALU_OP_SUB :
 		lui || sll || sllv ? `ALU_OP_SLL :
 		srl || srlv ? `ALU_OP_SRL :
 		sra || srav ? `ALU_OP_SRA :
@@ -82,8 +87,9 @@ module stage_decode(
 		_xor || xori ? `ALU_OP_XOR :
 		_nor ? `ALU_OP_NOR : 0;
 	assign sa = lui ? 16 : instr[10:6];
-	assign ext_imm = lw || sw ? {{16{imm[15]}}, imm} : {16'b0, imm};
+	assign ext_imm = addi || lw || sw ? {{16{imm[15]}}, imm} : {16'b0, imm};
 	assign mem_write = sw;
+	assign check_overflow = add || addi || sub;
 
 	wire [31:0] branch_target = $signed(pc) + $signed({instr[15:0], 2'b0});
 	assign next_pc =

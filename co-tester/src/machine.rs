@@ -165,6 +165,58 @@ impl Instruction for NopInstr {
 }
 
 #[derive(Debug, Copy, Clone)]
+pub struct AddInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub rd: u8,
+}
+
+impl Display for AddInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "add ${}, ${}, ${}", self.rd, self.rs, self.rt)
+	}
+}
+
+impl Instruction for AddInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, self.rd, 0, 0b100000)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		if let Some(res) = i32::checked_add(machine.read_grf(self.rs) as i32, machine.read_grf(self.rt) as i32) {
+			machine.write_grf(self.rd, res as u32);
+		}
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct AddiInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub imm: i16,
+}
+
+impl Display for AddiInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "addi ${}, ${}, {}", self.rt, self.rs, self.imm)
+	}
+}
+
+impl Instruction for AddiInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b001000, self.rs, self.rt, self.imm as u16)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		if let Some(res) = i32::checked_add(machine.read_grf(self.rs) as i32, self.imm as i32) {
+			machine.write_grf(self.rt, res as u32);
+		}
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
 pub struct AdduInstr {
 	pub rs: u8,
 	pub rt: u8,
@@ -187,6 +239,59 @@ impl Instruction for AdduInstr {
 			self.rd,
 			u32::wrapping_add(machine.read_grf(self.rs), machine.read_grf(self.rt)),
 		);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct AddiuInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub imm: u16,
+}
+
+impl Display for AddiuInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "addiu ${}, ${}, {}", self.rt, self.rs, self.imm)
+	}
+}
+
+impl Instruction for AddiuInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b001001, self.rs, self.rt, self.imm)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(
+			self.rt,
+			u32::wrapping_add(machine.read_grf(self.rs), self.imm as u32),
+		);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SubInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub rd: u8,
+}
+
+impl Display for SubInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "sub ${}, ${}, ${}", self.rd, self.rs, self.rt)
+	}
+}
+
+impl Instruction for SubInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, self.rd, 0, 0b100010)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		if let Some(res) = i32::checked_sub(machine.read_grf(self.rs) as i32, machine.read_grf(self.rt) as i32) {
+			machine.write_grf(self.rd, res as u32);
+		}
 		BranchResult::None
 	}
 }
