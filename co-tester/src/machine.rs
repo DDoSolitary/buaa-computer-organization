@@ -732,6 +732,14 @@ impl Instruction for SwInstr {
 	}
 }
 
+fn calc_branch_addr(pc: u32, offset: i16) -> u32 {
+	let addr = u32::wrapping_add(
+		pc,
+		u32::wrapping_mul(offset as u32, WORD_SIZE as u32),
+	);
+	u32::wrapping_add(addr, WORD_SIZE as u32)
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct BeqInstr {
 	pub rs: u8,
@@ -752,12 +760,138 @@ impl Instruction for BeqInstr {
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		if machine.read_grf(self.rs) == machine.read_grf(self.rt) {
-			let addr = u32::wrapping_add(
-				machine.pc(),
-				u32::wrapping_mul(self.offset as u32, WORD_SIZE as u32),
-			);
-			let addr = u32::wrapping_add(addr, WORD_SIZE as u32);
-			BranchResult::Yes(addr)
+			BranchResult::Yes(calc_branch_addr(machine.pc(), self.offset))
+		} else {
+			BranchResult::No
+		}
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct BneInstr {
+	pub rs: u8,
+	pub rt: u8,
+	pub offset: i16,
+}
+
+impl Display for BneInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "bne ${}, ${}, {}", self.rs, self.rt, self.offset)
+	}
+}
+
+impl Instruction for BneInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b000101, self.rs, self.rt, self.offset as u16)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		if machine.read_grf(self.rs) != machine.read_grf(self.rt) {
+			BranchResult::Yes(calc_branch_addr(machine.pc(), self.offset))
+		} else {
+			BranchResult::No
+		}
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct BlezInstr {
+	pub rs: u8,
+	pub offset: i16,
+}
+
+impl Display for BlezInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "blez ${}, {}", self.rs, self.offset)
+	}
+}
+
+impl Instruction for BlezInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b000110, self.rs, 0, self.offset as u16)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		if machine.read_grf(self.rs) as i32 <= 0 {
+			BranchResult::Yes(calc_branch_addr(machine.pc(), self.offset))
+		} else {
+			BranchResult::No
+		}
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct BltzInstr {
+	pub rs: u8,
+	pub offset: i16,
+}
+
+impl Display for BltzInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "bltz ${}, {}", self.rs, self.offset)
+	}
+}
+
+impl Instruction for BltzInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b000001, self.rs, 0b00000, self.offset as u16)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		if (machine.read_grf(self.rs) as i32) < 0 {
+			BranchResult::Yes(calc_branch_addr(machine.pc(), self.offset))
+		} else {
+			BranchResult::No
+		}
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct BgezInstr {
+	pub rs: u8,
+	pub offset: i16,
+}
+
+impl Display for BgezInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "bgez ${}, {}", self.rs, self.offset)
+	}
+}
+
+impl Instruction for BgezInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b000001, self.rs, 0b00001, self.offset as u16)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		if machine.read_grf(self.rs) as i32 >= 0 {
+			BranchResult::Yes(calc_branch_addr(machine.pc(), self.offset))
+		} else {
+			BranchResult::No
+		}
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct BgtzInstr {
+	pub rs: u8,
+	pub offset: i16,
+}
+
+impl Display for BgtzInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "bgtz ${}, {}", self.rs, self.offset)
+	}
+}
+
+impl Instruction for BgtzInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b000111, self.rs, 0, self.offset as u16)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		if machine.read_grf(self.rs) as i32 > 0 {
+			BranchResult::Yes(calc_branch_addr(machine.pc(), self.offset))
 		} else {
 			BranchResult::No
 		}

@@ -31,6 +31,11 @@ pub enum InstructionType {
 	Lw,
 	Sw,
 	Beq,
+	Bne,
+	Blez,
+	Bltz,
+	Bgez,
+	Bgtz,
 	J,
 	Jal,
 	Jr,
@@ -39,7 +44,7 @@ pub enum InstructionType {
 
 impl InstructionType {
 	fn is_branch(&self) -> bool {
-		matches!(self, Self::Beq | Self::J | Self::Jal | Self::Jr | Self::Jalr)
+		matches!(self, Self::Beq | Self::Bne | Self::Blez | Self::Bltz | Self::Bgez | Self::Bgtz | Self::J | Self::Jal | Self::Jr | Self::Jalr)
 	}
 }
 
@@ -297,6 +302,27 @@ impl Iterator for InstructionGenerator<'_> {
 			InstructionType::Beq => Box::new(BeqInstr {
 				rs: self.gen_grf_read_addr(None),
 				rt: self.gen_grf_read_addr(None),
+				offset: self.gen_branch_offset(),
+			}),
+			InstructionType::Bne => Box::new(BneInstr {
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
+				offset: self.gen_branch_offset(),
+			}),
+			InstructionType::Blez => Box::new(BlezInstr {
+				rs: self.gen_grf_read_addr(None),
+				offset: self.gen_branch_offset(),
+			}),
+			InstructionType::Bltz => Box::new(BltzInstr {
+				rs: self.gen_grf_read_addr(None),
+				offset: self.gen_branch_offset(),
+			}),
+			InstructionType::Bgez => Box::new(BgezInstr {
+				rs: self.gen_grf_read_addr(None),
+				offset: self.gen_branch_offset(),
+			}),
+			InstructionType::Bgtz => Box::new(BgtzInstr {
+				rs: self.gen_grf_read_addr(None),
 				offset: self.gen_branch_offset(),
 			}),
 			InstructionType::J => Box::new(JInstr {
