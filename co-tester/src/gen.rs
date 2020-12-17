@@ -91,6 +91,7 @@ pub struct InstructionGenerator<'a> {
 
 impl<'a> InstructionGenerator<'a> {
 	pub fn new(machine: &'a mut MipsMachine, instr_set: &'a [InstructionType], instr_count: u32) -> Self {
+		let mem_size = machine.mem().len();
 		Self {
 			machine,
 			instr_set,
@@ -101,7 +102,7 @@ impl<'a> InstructionGenerator<'a> {
 			rng: rand::thread_rng(),
 			grf_addr_dist: Uniform::new(0, GRF_SIZE as u8),
 			grf_addr_excluded_dist: Uniform::new(0, GRF_SIZE as u8 - 1),
-			mem_addr_dist: Uniform::new(0, (MEM_SIZE * WORD_SIZE) as u32),
+			mem_addr_dist: Uniform::new(0, (mem_size * WORD_SIZE) as u32),
 			imm_dist: Uniform::new_inclusive(0, u16::max_value()),
 			branch_dist: Normal::new(0f64, 5f64).unwrap(),
 		}

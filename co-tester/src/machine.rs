@@ -5,7 +5,6 @@ use super::log::{GrfLogEntry, MemLogEntry};
 
 pub const WORD_SIZE: usize = mem::size_of::<u32>();
 pub const GRF_SIZE: usize = 32;
-pub const MEM_SIZE: usize = 1024;
 pub const TEXT_START_ADDR: u32 = 0x3000;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -22,13 +21,13 @@ pub struct MipsMachine {
 	grf: Box<[u32; GRF_SIZE]>,
 	lo: u32,
 	hi: u32,
-	mem: Box<[u32; MEM_SIZE]>,
+	mem: Vec<u32>,
 	grf_log: Vec<GrfLogEntry>,
 	mem_log: Vec<MemLogEntry>,
 }
 
 impl MipsMachine {
-	pub fn new(delayed_branching: bool) -> Self {
+	pub fn new(delayed_branching: bool, mem_size: usize) -> Self {
 		Self {
 			delayed_branching,
 			pc: TEXT_START_ADDR,
@@ -36,7 +35,7 @@ impl MipsMachine {
 			grf: Box::new([0u32; GRF_SIZE]),
 			lo: 0,
 			hi: 0,
-			mem: Box::new([0u32; MEM_SIZE]),
+			mem: vec![0u32; mem_size],
 			grf_log: Vec::new(),
 			mem_log: Vec::new(),
 		}
@@ -45,6 +44,7 @@ impl MipsMachine {
 	pub fn pc(&self) -> u32 { self.pc }
 	pub fn state(&self) -> MachineState { self.state }
 	pub fn grf(&self) -> &[u32; GRF_SIZE] { &self.grf }
+	pub fn mem(&self) -> &[u32] { &self.mem }
 	pub fn grf_log(&self) -> &[GrfLogEntry] { &self.grf_log }
 	pub fn mem_log(&self) -> &[MemLogEntry] { &self.mem_log }
 

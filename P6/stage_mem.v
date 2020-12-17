@@ -1,6 +1,6 @@
 `include "def.v"
 
-module stage_mem #(parameter ADDR_WIDTH = 12) (
+module stage_mem #(parameter ADDR_WIDTH = 14) (
 	input wire clk,
 	input wire reset,
 	input wire write_enable,

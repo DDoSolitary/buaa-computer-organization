@@ -220,7 +220,7 @@ module mips_test();
 		reset = 1;
 		#10;
 		reset = 0;
-		#20480;
+		#81920;
 		$finish();
 	end
 endmodule

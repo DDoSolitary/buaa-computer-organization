@@ -37,8 +37,6 @@ use gen::{InstructionType, InstructionGenerator};
 use log::LogEntry;
 use machine::MipsMachine;
 
-const INSTR_COUNT: u32 = 1023;
-
 #[derive(Debug)]
 struct TestFailureError {
 	reason: String,
@@ -92,6 +90,16 @@ async fn main() {
 		.arg(clap::Arg::with_name("no-db")
 			.long("no-db")
 			.help("Disable delayed branching."))
+		.arg(clap::Arg::with_name("mem-size")
+			.long("mem-size")
+			.takes_value(true)
+			.default_value("4096")
+			.help("Size of data memory in 4-byte words."))
+		.arg(clap::Arg::with_name("instr-count")
+			.long("instr-count")
+			.takes_value(true)
+			.default_value("4096")
+			.help("Number of instructions to generate per test case."))
 		.arg(clap::Arg::with_name("fail-fast")
 			.long("fail-fast")
 			.help("Stop testing immediately if one test fails."))
@@ -110,6 +118,8 @@ async fn main() {
 	let test_count = matches.value_of("count").unwrap().parse::<u32>().unwrap();
 	let thread_count = matches.value_of("threads").unwrap().parse::<usize>().unwrap();
 	let no_db = matches.is_present("no-db");
+	let mem_size = matches.value_of("mem-size").unwrap().parse::<usize>().unwrap();
+	let instr_count = matches.value_of("instr-count").unwrap().parse::<u32>().unwrap();
 	let fail_fast = matches.is_present("fail-fast");
 	let tmp_dir = matches.value_of_os("tmp-dir").unwrap();
 	let subject_path = matches.value_of_os("subject-path").unwrap();
@@ -145,8 +155,8 @@ async fn main() {
 			tokio::task::spawn_blocking(move || {
 				let mut asm_data = Vec::new();
 				let mut code_data = Vec::new();
-				let mut machine = MipsMachine::new(!no_db);
-				for instr in InstructionGenerator::new(&mut machine, &instr_set, INSTR_COUNT) {
+				let mut machine = MipsMachine::new(!no_db, mem_size);
+				for instr in InstructionGenerator::new(&mut machine, &instr_set, instr_count) {
 					asm_data.extend(format!("{}\n", instr).as_bytes());
 					code_data.extend(format!("{:08x}\n", instr.to_machine_code()).as_bytes());
 				}
