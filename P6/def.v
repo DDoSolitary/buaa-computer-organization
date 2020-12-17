@@ -11,7 +11,7 @@
 `define ALU_SRC1_RT 0
 `define ALU_SRC1_EXT 1
 
-`define ALU_OP_LEN 4
+`define ALU_OP_LEN 5
 `define ALU_OP_ADD 0
 `define ALU_OP_SUB 1
 `define ALU_OP_AND 2
@@ -23,6 +23,18 @@
 `define ALU_OP_SRA 8
 `define ALU_OP_SLT 9
 `define ALU_OP_SLTU 10
+`define ALU_OP_MULT 11
+`define ALU_OP_MULTU 12
+`define ALU_OP_DIV 13
+`define ALU_OP_DIVU 14
+`define ALU_OP_MFLO 15
+`define ALU_OP_MFHI 16
+`define ALU_OP_MTLO 17
+`define ALU_OP_MTHI 18
+`define ALU_OP_STALL_MIN `ALU_OP_MULT
+`define ALU_OP_STALL_MAX `ALU_OP_MTHI
+`define ALU_OP_BUSY_MIN `ALU_OP_MULT
+`define ALU_OP_BUSY_MAX `ALU_OP_DIVU
 
 `define MEM_TYPE_LEN 2
 `define MEM_TYPE_BYTE 0

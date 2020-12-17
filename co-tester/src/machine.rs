@@ -20,6 +20,8 @@ pub struct MipsMachine {
 	pc: u32,
 	state: MachineState,
 	grf: Box<[u32; GRF_SIZE]>,
+	lo: u32,
+	hi: u32,
 	mem: Box<[u32; MEM_SIZE]>,
 	grf_log: Vec<GrfLogEntry>,
 	mem_log: Vec<MemLogEntry>,
@@ -32,6 +34,8 @@ impl MipsMachine {
 			pc: TEXT_START_ADDR,
 			state: MachineState::Normal,
 			grf: Box::new([0u32; GRF_SIZE]),
+			lo: 0,
+			hi: 0,
 			mem: Box::new([0u32; MEM_SIZE]),
 			grf_log: Vec::new(),
 			mem_log: Vec::new(),
@@ -1268,5 +1272,205 @@ impl Instruction for JalrInstr {
 		debug_assert_ne!(self.rs, self.rd);
 		machine.write_grf(self.rd, machine.pc() + WORD_SIZE as u32 * 2);
 		BranchResult::Yes(machine.read_grf(self.rs))
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct MultInstr {
+	pub rs: u8,
+	pub rt: u8,
+}
+
+impl Display for MultInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "mult ${}, ${}", self.rs, self.rt)
+	}
+}
+
+impl Instruction for MultInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, 0, 0, 0b011000)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		let res = i64::wrapping_mul(machine.read_grf(self.rs) as i32 as i64, machine.read_grf(self.rt) as i32 as i64);
+		machine.lo = res as u32;
+		machine.hi = (res >> 32) as u32;
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct MultuInstr {
+	pub rs: u8,
+	pub rt: u8,
+}
+
+impl Display for MultuInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "multu ${}, ${}", self.rs, self.rt)
+	}
+}
+
+impl Instruction for MultuInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, 0, 0, 0b011001)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		let res = u64::wrapping_mul(machine.read_grf(self.rs) as u64, machine.read_grf(self.rt) as u64);
+		machine.lo = res as u32;
+		machine.hi = (res >> 32) as u32;
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct DivInstr {
+	pub rs: u8,
+	pub rt: u8,
+}
+
+impl Display for DivInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "div ${}, ${}", self.rs, self.rt)
+	}
+}
+
+impl Instruction for DivInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, 0, 0, 0b011010)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		let in0 = machine.read_grf(self.rs) as i32;
+		let in1 = machine.read_grf(self.rt) as i32;
+		if in1 != 0 {
+			machine.lo = i32::wrapping_div(in0, in1) as u32;
+			machine.hi = i32::wrapping_rem(in0, in1) as u32;
+		} else {
+			machine.lo = 0;
+			machine.hi = 0;
+		}
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct DivuInstr {
+	pub rs: u8,
+	pub rt: u8,
+}
+
+impl Display for DivuInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "divu ${}, ${}", self.rs, self.rt)
+	}
+}
+
+impl Instruction for DivuInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, self.rt, 0, 0, 0b011011)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		let in0 = machine.read_grf(self.rs);
+		let in1 = machine.read_grf(self.rt);
+		if in1 != 0 {
+			machine.lo = in0 / in1;
+			machine.hi = in0 % in1;
+		} else {
+			machine.lo = 0;
+			machine.hi = 0;
+		}
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct MfloInstr {
+	pub rd: u8,
+}
+
+impl Display for MfloInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "mflo ${}", self.rd)
+	}
+}
+
+impl Instruction for MfloInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, 0, 0, self.rd, 0, 0b010010)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(self.rd, machine.lo);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct MfhiInstr {
+	pub rd: u8,
+}
+
+impl Display for MfhiInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "mfhi ${}", self.rd)
+	}
+}
+
+impl Instruction for MfhiInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, 0, 0, self.rd, 0, 0b010000)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.write_grf(self.rd, machine.hi);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct MtloInstr {
+	pub rs: u8,
+}
+
+impl Display for MtloInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "mtlo ${}", self.rs)
+	}
+}
+
+impl Instruction for MtloInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, 0, 0, 0, 0b010011)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.lo = machine.read_grf(self.rs);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct MthiInstr {
+	pub rs: u8,
+}
+
+impl Display for MthiInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "mthi ${}", self.rs)
+	}
+}
+
+impl Instruction for MthiInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_r(0, self.rs, 0, 0, 0, 0b010001)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		machine.hi = machine.read_grf(self.rs);
+		BranchResult::None
 	}
 }

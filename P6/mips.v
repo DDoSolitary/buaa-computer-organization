@@ -17,7 +17,7 @@ module mips(
 
 	wire [4:0] e_write_addr;
 	wire [31:0] e_read_data0, e_read_data1, e_alu_result, e_write_data;
-	wire e_overflowed, e_mem_unaligned;
+	wire e_overflowed, e_mem_unaligned, e_alu_busy;
 
 	wire [31:0] m_read_data, m_mem_read_data, m_write_data;
 
@@ -78,7 +78,8 @@ module mips(
 	wire stall_em = em_write_addr != 0 &&
 		((d_read_addr0 == em_write_addr && em_write_stage - 1 > d_read_stage0) ||
 		(d_read_addr1 == em_write_addr && em_write_stage - 1 > d_read_stage1));
-	wire stall = stall_de || stall_em;
+	wire stall_alu = d_alu_op >= `ALU_OP_STALL_MIN && d_alu_op <= `ALU_OP_STALL_MAX && e_alu_busy;
+	wire stall = stall_de || stall_em || stall_alu;
 
 	assign f_next_pc = stall ? f_pc : d_next_pc;
 
@@ -109,12 +110,14 @@ module mips(
 	);
 
 	stage_execute stage_execute(
+		.clk(clk), .reset(reset),
 		.grf_in0(e_read_data0), .grf_in1(e_read_data1),
 		.alu_src0(de_alu_src0), .alu_src1(de_alu_src1), .alu_op(de_alu_op),
 		.sa(de_sa), .ext_imm(de_ext_imm),
 		.mem_write(de_mem_write), .mem_type(de_mem_type),
 		.alu_result(e_alu_result), .overflowed(e_overflowed),
-		.mem_unaligned(e_mem_unaligned)
+		.mem_unaligned(e_mem_unaligned),
+		.alu_busy(e_alu_busy)
 	);
 
 	stage_mem stage_mem(
@@ -182,7 +185,7 @@ module mips(
 			de_write_stage <= d_write_stage;
 			de_alu_src0 <= d_alu_src0;
 			de_alu_src1 <= d_alu_src1;
-			de_alu_op <= d_alu_op;
+			de_alu_op <= stall ? 0 : d_alu_op;
 			de_sa <= d_sa;
 			de_ext_imm <= d_ext_imm;
 			de_mem_write <= !stall && d_mem_write;

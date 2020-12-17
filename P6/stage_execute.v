@@ -1,6 +1,8 @@
 `include "def.v"
 
 module stage_execute(
+	input wire clk,
+	input wire reset,
 	input wire [31:0] grf_in0,
 	input wire [31:0] grf_in1,
 	input wire alu_src0,
@@ -12,8 +14,14 @@ module stage_execute(
 	input wire [`MEM_TYPE_LEN - 1:0] mem_type,
 	output wire [31:0] alu_result,
 	output wire overflowed,
-	output wire mem_unaligned
+	output wire mem_unaligned,
+	output wire alu_busy
 );
+	reg [31:0] lo, hi;
+	reg [3:0] busy_count;
+
+	assign alu_busy = busy_count > 0 || (alu_op >= `ALU_OP_BUSY_MIN && alu_op <= `ALU_OP_BUSY_MAX);
+
 	wire [31:0] in0 = alu_src0 == `ALU_SRC0_RS ? grf_in0 : sa;
 	wire [31:0] in1 = alu_src1 == `ALU_SRC1_RT ? grf_in1 : ext_imm;
 
@@ -40,9 +48,48 @@ module stage_execute(
 		alu_op == `ALU_OP_SRL ? in1 >> in0[4:0] :
 		alu_op == `ALU_OP_SRA ? sra_result :
 		alu_op == `ALU_OP_SLT ? slt_result :
-		alu_op == `ALU_OP_SLTU ? in0 < in1 : 0;
+		alu_op == `ALU_OP_SLTU ? in0 < in1 :
+		alu_op == `ALU_OP_MFLO ? lo :
+		alu_op == `ALU_OP_MFHI ? hi : 0;
 
 	assign mem_unaligned = mem_write && (
 		mem_type == `MEM_TYPE_HALF && (alu_result & 'b1) != 0 ||
 		mem_type == `MEM_TYPE_WORD && (alu_result & 'b11) != 0);
+
+	always @(posedge clk)
+		if (reset) begin
+			lo <= 0;
+			hi <= 0;
+			busy_count <= 0;
+		end else if (busy_count == 0) begin
+			if (alu_op == `ALU_OP_MULT) begin
+				{hi, lo} <= {{32{in0[31]}}, in0} * {{32{in1[31]}}, in1};
+				busy_count <= 5;
+			end else if (alu_op == `ALU_OP_MULTU) begin
+				{hi, lo} <= {32'b0, in0} * {32'b0, in1};
+				busy_count <= 5;
+			end else if (alu_op == `ALU_OP_DIV) begin
+				if (in1 != 0) begin
+					lo <= $signed(in0) / $signed(in1);
+					hi <= $signed(in0) % $signed(in1);
+				end else begin
+					lo <= 0;
+					hi <= 0;
+				end
+				busy_count <= 10;
+			end else if (alu_op == `ALU_OP_DIVU) begin
+				if (in1 != 0) begin
+					lo <= in0 / in1;
+					hi <= in0 % in1;
+				end else begin
+					lo <= 0;
+					hi <= 0;
+				end
+				busy_count <= 10;
+			end else if (alu_op == `ALU_OP_MTLO)
+				lo <= in0;
+			else if (alu_op == `ALU_OP_MTHI)
+				hi <= in0;
+		end else
+			busy_count <= busy_count - 1;
 endmodule

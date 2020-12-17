@@ -50,6 +50,14 @@ pub enum InstructionType {
 	Jal,
 	Jr,
 	Jalr,
+	Mult,
+	Multu,
+	Div,
+	Divu,
+	Mflo,
+	Mfhi,
+	Mtlo,
+	Mthi,
 }
 
 impl InstructionType {
@@ -423,6 +431,34 @@ impl Iterator for InstructionGenerator<'_> {
 					rd: self.gen_grf_read_addr(Some(rs)),
 				})
 			},
+			InstructionType::Mult => Box::new(MultInstr {
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
+			}),
+			InstructionType::Multu => Box::new(MultuInstr {
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
+			}),
+			InstructionType::Div => Box::new(DivInstr {
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
+			}),
+			InstructionType::Divu => Box::new(DivuInstr {
+				rs: self.gen_grf_read_addr(None),
+				rt: self.gen_grf_read_addr(None),
+			}),
+			InstructionType::Mflo => Box::new(MfloInstr {
+				rd: self.rng.sample(&self.grf_addr_dist),
+			}),
+			InstructionType::Mfhi => Box::new(MfhiInstr {
+				rd: self.rng.sample(&self.grf_addr_dist),
+			}),
+			InstructionType::Mtlo => Box::new(MtloInstr {
+				rs: self.gen_grf_read_addr(None),
+			}),
+			InstructionType::Mthi => Box::new(MthiInstr {
+				rs: self.gen_grf_read_addr(None),
+			}),
 		};
 		self.machine.execute(&*instr);
 		Some(instr)
