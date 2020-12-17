@@ -10,7 +10,6 @@ module stage_execute(
 	input wire [`ALU_OP_LEN - 1:0] alu_op,
 	input wire [31:0] ext_imm,
 	input wire [4:0] sa,
-	input wire mem_write,
 	input wire [`MEM_TYPE_LEN - 1:0] mem_type,
 	output wire [31:0] alu_result,
 	output wire overflowed,
@@ -52,9 +51,9 @@ module stage_execute(
 		alu_op == `ALU_OP_MFLO ? lo :
 		alu_op == `ALU_OP_MFHI ? hi : 0;
 
-	assign mem_unaligned = mem_write && (
+	assign mem_unaligned =
 		mem_type == `MEM_TYPE_HALF && (alu_result & 'b1) != 0 ||
-		mem_type == `MEM_TYPE_WORD && (alu_result & 'b11) != 0);
+		mem_type == `MEM_TYPE_WORD && (alu_result & 'b11) != 0;
 
 	always @(posedge clk)
 		if (reset) begin

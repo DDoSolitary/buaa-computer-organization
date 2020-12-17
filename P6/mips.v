@@ -17,7 +17,7 @@ module mips(
 
 	wire [4:0] e_write_addr;
 	wire [31:0] e_read_data0, e_read_data1, e_alu_result, e_write_data;
-	wire e_overflowed, e_mem_unaligned, e_alu_busy;
+	wire e_mem_write, e_overflowed, e_mem_unaligned, e_alu_busy;
 
 	wire [31:0] m_read_data, m_mem_read_data, m_write_data;
 
@@ -48,8 +48,9 @@ module mips(
 	reg [31:0] mw_write_data;
 	reg [`REG_EXT_LEN - 1:0] mw_ext_type;
 
-	assign e_write_addr = de_check_overflow && e_overflowed ? 0 : de_write_addr;
+	assign e_write_addr = de_check_overflow && e_overflowed || de_write_stage == `STAGE_MEM && e_mem_unaligned ? 0 : de_write_addr;
 	assign e_write_data = de_write_stage == `STAGE_EXECUTE ? e_alu_result : de_write_data;
+	assign e_mem_write = !e_mem_unaligned && de_mem_write;
 	assign m_write_data = em_write_stage == `STAGE_MEM ? m_mem_read_data : em_write_data;
 
 	assign d_read_data0 =
@@ -114,7 +115,7 @@ module mips(
 		.grf_in0(e_read_data0), .grf_in1(e_read_data1),
 		.alu_src0(de_alu_src0), .alu_src1(de_alu_src1), .alu_op(de_alu_op),
 		.sa(de_sa), .ext_imm(de_ext_imm),
-		.mem_write(de_mem_write), .mem_type(de_mem_type),
+		.mem_type(de_mem_type),
 		.alu_result(e_alu_result), .overflowed(e_overflowed),
 		.mem_unaligned(e_mem_unaligned),
 		.alu_busy(e_alu_busy)
@@ -198,7 +199,7 @@ module mips(
 			em_write_addr <= e_write_addr;
 			em_write_data <= e_write_data;
 			em_write_stage <= de_write_stage;
-			em_mem_write <= !e_mem_unaligned && de_mem_write;
+			em_mem_write <= e_mem_write;
 			em_mem_type <= de_mem_type;
 			em_ext_type <= de_ext_type;
 			em_alu_result <= e_alu_result;
