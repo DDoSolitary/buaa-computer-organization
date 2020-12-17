@@ -28,7 +28,13 @@ pub enum InstructionType {
 	Xori,
 	Nor,
 	Lui,
+	Lb,
+	Lbu,
+	Lh,
+	Lhu,
 	Lw,
+	Sb,
+	Sh,
 	Sw,
 	Slt,
 	Slti,
@@ -153,6 +159,15 @@ impl<'a> InstructionGenerator<'a> {
 
 	fn gen_jump_addr(&mut self) -> u32 {
 		self.machine.pc() / WORD_SIZE as u32 + self.gen_branch_offset() as u32 + 1
+	}
+
+	fn gen_grf_load_addr(&mut self, base: u8) -> u8 {
+		if self.machine.state() == MachineState::InDelaySlot(self.machine.pc()) {
+			let addr = self.rng.sample(&self.grf_addr_excluded_dist);
+			if addr >= base { addr + 1 } else { addr }
+		} else {
+			self.rng.sample(&self.grf_addr_dist)
+		}
 	}
 }
 
@@ -302,16 +317,59 @@ impl Iterator for InstructionGenerator<'_> {
 				rt: self.rng.sample(&self.grf_addr_dist),
 				imm: self.rng.sample(&self.imm_dist),
 			}),
+			InstructionType::Lb => {
+				let (base, offset) = self.gen_base_and_offset(!0);
+				Box::new(LbInstr {
+					base,
+					rt: self.gen_grf_load_addr(base),
+					offset,
+				})
+			}
+			InstructionType::Lbu => {
+				let (base, offset) = self.gen_base_and_offset(!0);
+				Box::new(LbuInstr {
+					base,
+					rt: self.gen_grf_load_addr(base),
+					offset,
+				})
+			}
+			InstructionType::Lh => {
+				let (base, offset) = self.gen_base_and_offset(!0b1);
+				Box::new(LhInstr {
+					base,
+					rt: self.gen_grf_load_addr(base),
+					offset,
+				})
+			}
+			InstructionType::Lhu => {
+				let (base, offset) = self.gen_base_and_offset(!0b1);
+				Box::new(LhuInstr {
+					base,
+					rt: self.gen_grf_load_addr(base),
+					offset,
+				})
+			}
 			InstructionType::Lw => {
 				let (base, offset) = self.gen_base_and_offset(!0b11);
-				let rt = if self.machine.state() == MachineState::InDelaySlot(self.machine.pc()) {
-					self.gen_grf_read_addr(Some(base))
-				} else {
-					self.gen_grf_read_addr(None)
-				};
 				Box::new(LwInstr {
 					base,
-					rt,
+					rt: self.gen_grf_load_addr(base),
+					offset,
+				})
+			}
+			InstructionType::Sb => {
+				let (base, offset) = self.gen_base_and_offset(!0);
+				Box::new(SbInstr {
+					base,
+					rt: self.gen_grf_read_addr(None),
+					offset,
+				})
+			}
+			InstructionType::Sh => {
+				let (base, offset) = self.gen_base_and_offset(!0b1);
+				Box::new(SbInstr {
+					base,
+					rt: self.gen_grf_read_addr(None),
 					offset,
 				})
 			}
@@ -319,7 +377,7 @@ impl Iterator for InstructionGenerator<'_> {
 				let (base, offset) = self.gen_base_and_offset(!0b11);
 				Box::new(SwInstr {
 					base,
-					rt: self.rng.sample(&self.grf_addr_dist),
+					rt: self.gen_grf_read_addr(None),
 					offset,
 				})
 			}

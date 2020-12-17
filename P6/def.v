@@ -23,3 +23,15 @@
 `define ALU_OP_SRA 8
 `define ALU_OP_SLT 9
 `define ALU_OP_SLTU 10
+
+`define MEM_TYPE_LEN 2
+`define MEM_TYPE_BYTE 0
+`define MEM_TYPE_HALF 1
+`define MEM_TYPE_WORD 2
+
+`define REG_EXT_LEN 3
+`define REG_EXT_NONE 0
+`define REG_EXT_BYTE 1
+`define REG_EXT_BYTE_U 2
+`define REG_EXT_HALF 3
+`define REG_EXT_HALF_U 4

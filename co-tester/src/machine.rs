@@ -791,6 +791,118 @@ impl Instruction for LuiInstr {
 }
 
 #[derive(Debug, Copy, Clone)]
+pub struct LbInstr {
+	pub base: u8,
+	pub rt: u8,
+	pub offset: i16,
+}
+
+impl Display for LbInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "lb ${}, {}(${})", self.rt, self.offset, self.base)
+	}
+}
+
+impl Instruction for LbInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b100000, self.base, self.rt, self.offset as u16)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
+		let mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
+		machine.write_grf(self.rt, mem_bytes[(addr & 0b11) as usize] as i8 as u32);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct LbuInstr {
+	pub base: u8,
+	pub rt: u8,
+	pub offset: i16,
+}
+
+impl Display for LbuInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "lbu ${}, {}(${})", self.rt, self.offset, self.base)
+	}
+}
+
+impl Instruction for LbuInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b100100, self.base, self.rt, self.offset as u16)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
+		let mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
+		machine.write_grf(self.rt, mem_bytes[(addr & 0b11) as usize] as u32);
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct LhInstr {
+	pub base: u8,
+	pub rt: u8,
+	pub offset: i16,
+}
+
+impl Display for LhInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "lh ${}, {}(${})", self.rt, self.offset, self.base)
+	}
+}
+
+impl Instruction for LhInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b100001, self.base, self.rt, self.offset as u16)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
+		if addr & 0b1 == 0 {
+			let mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
+			let byte_offset = (addr & 0b10) as usize;
+			let data_bytes = [mem_bytes[byte_offset], mem_bytes[byte_offset + 1]];
+			machine.write_grf(self.rt, i16::from_le_bytes(data_bytes) as u32);
+		}
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct LhuInstr {
+	pub base: u8,
+	pub rt: u8,
+	pub offset: i16,
+}
+
+impl Display for LhuInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "lhu ${}, {}(${})", self.rt, self.offset, self.base)
+	}
+}
+
+impl Instruction for LhuInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b100101, self.base, self.rt, self.offset as u16)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
+		if addr & 0b1 == 0 {
+			let mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
+			let byte_offset = (addr & 0b10) as usize;
+			let data_bytes = [mem_bytes[byte_offset], mem_bytes[byte_offset + 1]];
+			machine.write_grf(self.rt, u16::from_le_bytes(data_bytes) as u32);
+		}
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
 pub struct LwInstr {
 	pub base: u8,
 	pub rt: u8,
@@ -810,7 +922,68 @@ impl Instruction for LwInstr {
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
-		machine.write_grf(self.rt, machine.read_mem(addr));
+		if addr & 0b11 == 0 {
+			machine.write_grf(self.rt, machine.read_mem(addr));
+		}
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SbInstr {
+	pub base: u8,
+	pub rt: u8,
+	pub offset: i16,
+}
+
+impl Display for SbInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "sb ${}, {}(${})", self.rt, self.offset, self.base)
+	}
+}
+
+impl Instruction for SbInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b101000, self.base, self.rt, self.offset as u16)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
+		let mut mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
+		mem_bytes[(addr & 0b11) as usize] = machine.read_grf(self.rt) as u8;
+		machine.write_mem(addr & !0b11, u32::from_le_bytes(mem_bytes));
+		BranchResult::None
+	}
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct ShInstr {
+	pub base: u8,
+	pub rt: u8,
+	pub offset: i16,
+}
+
+impl Display for ShInstr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "sh ${}, {}(${})", self.rt, self.offset, self.base)
+	}
+}
+
+impl Instruction for ShInstr {
+	fn to_machine_code(&self) -> u32 {
+		gen_machine_code_i(0b101001, self.base, self.rt, self.offset as u16)
+	}
+
+	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
+		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
+		if addr & 0b1 == 0 {
+			let mut mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
+			let data_bytes = machine.read_grf(self.rt).to_le_bytes();
+			let byte_offset = (addr & 0b10) as usize;
+			mem_bytes[byte_offset] = data_bytes[0];
+			mem_bytes[byte_offset + 1] = data_bytes[1];
+			machine.write_mem(addr & !0b11, u32::from_le_bytes(mem_bytes));
+		}
 		BranchResult::None
 	}
 }
@@ -835,7 +1008,9 @@ impl Instruction for SwInstr {
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
-		machine.write_mem(addr, machine.read_grf(self.rt));
+		if addr & 0b11 == 0 {
+			machine.write_mem(addr, machine.read_grf(self.rt));
+		}
 		BranchResult::None
 	}
 }

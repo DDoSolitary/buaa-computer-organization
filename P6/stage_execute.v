@@ -8,8 +8,11 @@ module stage_execute(
 	input wire [`ALU_OP_LEN - 1:0] alu_op,
 	input wire [31:0] ext_imm,
 	input wire [4:0] sa,
+	input wire mem_write,
+	input wire [`MEM_TYPE_LEN - 1:0] mem_type,
 	output wire [31:0] alu_result,
-	output wire overflowed
+	output wire overflowed,
+	output wire mem_unaligned
 );
 	wire [31:0] in0 = alu_src0 == `ALU_SRC0_RS ? grf_in0 : sa;
 	wire [31:0] in1 = alu_src1 == `ALU_SRC1_RT ? grf_in1 : ext_imm;
@@ -38,4 +41,8 @@ module stage_execute(
 		alu_op == `ALU_OP_SRA ? sra_result :
 		alu_op == `ALU_OP_SLT ? slt_result :
 		alu_op == `ALU_OP_SLTU ? in0 < in1 : 0;
+
+	assign mem_unaligned = mem_write && (
+		mem_type == `MEM_TYPE_HALF && (alu_result & 'b1) != 0 ||
+		mem_type == `MEM_TYPE_WORD && (alu_result & 'b11) != 0);
 endmodule
