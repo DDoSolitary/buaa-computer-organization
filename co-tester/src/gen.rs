@@ -224,7 +224,7 @@ impl Iterator for InstructionGenerator<'_> {
 			InstructionType::Addiu => Box::new(AddiuInstr {
 				rs: self.gen_grf_read_addr(None),
 				rt: self.rng.sample(&self.grf_addr_dist),
-				imm: self.rng.sample(&self.imm_dist),
+				imm: self.rng.sample(&self.imm_dist) as i16,
 			}),
 			InstructionType::Sub => Box::new(SubInstr {
 				rs: self.gen_grf_read_addr(None),

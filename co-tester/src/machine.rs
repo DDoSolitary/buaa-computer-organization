@@ -251,7 +251,7 @@ impl Instruction for AdduInstr {
 pub struct AddiuInstr {
 	pub rs: u8,
 	pub rt: u8,
-	pub imm: u16,
+	pub imm: i16,
 }
 
 impl Display for AddiuInstr {
@@ -262,7 +262,7 @@ impl Display for AddiuInstr {
 
 impl Instruction for AddiuInstr {
 	fn to_machine_code(&self) -> u32 {
-		gen_machine_code_i(0b001001, self.rs, self.rt, self.imm)
+		gen_machine_code_i(0b001001, self.rs, self.rt, self.imm as u16)
 	}
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {

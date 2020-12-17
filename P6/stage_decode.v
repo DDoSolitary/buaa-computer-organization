@@ -124,7 +124,7 @@ module stage_decode(
 		mtlo ? `ALU_OP_MTLO :
 		mthi ? `ALU_OP_MTHI : 0;
 	assign sa = lui ? 16 : instr[10:6];
-	assign ext_imm = addi || slti || sltiu || lb || lbu || lh || lhu || lw || sb || sh || sw ? {{16{imm[15]}}, imm} : {16'b0, imm};
+	assign ext_imm = addi || addiu || slti || sltiu || lb || lbu || lh || lhu || lw || sb || sh || sw ? {{16{imm[15]}}, imm} : {16'b0, imm};
 	assign mem_write = sb || sh || sw;
 	assign mem_type =
 		lb || lbu || sb ? `MEM_TYPE_BYTE :
