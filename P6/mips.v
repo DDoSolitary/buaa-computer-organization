@@ -48,7 +48,8 @@ module mips(
 	reg [31:0] mw_write_data;
 	reg [`REG_EXT_LEN - 1:0] mw_ext_type;
 
-	assign e_write_addr = de_check_overflow && e_overflowed || de_write_stage == `STAGE_MEM && e_mem_unaligned ? 0 : de_write_addr;
+	assign e_write_addr = de_check_overflow && e_overflowed || de_write_stage == `STAGE_MEM && e_mem_unaligned
+		? 0 : de_write_addr;
 	assign e_write_data = de_write_stage == `STAGE_EXECUTE ? e_alu_result : de_write_data;
 	assign e_mem_write = !e_mem_unaligned && de_mem_write;
 	assign m_write_data = em_write_stage == `STAGE_MEM ? m_mem_read_data : em_write_data;
@@ -172,8 +173,10 @@ module mips(
 			mw_write_data <= 0;
 			mw_ext_type <= 0;
 		end else begin
-			if (mw_write_addr != 0) $display("%d@%h: $%d <= %h", $time, mw_pc, mw_write_addr, w_write_data);
-			if (stage_mem.write_enable) $display("%d@%h: *%h <= %h", $time, em_pc, stage_mem.addr & ~'b11, stage_mem.real_write_data);
+			if (mw_write_addr != 0)
+				$display("%d@%h: $%d <= %h", $time, mw_pc, mw_write_addr, w_write_data);
+			if (stage_mem.write_enable)
+				$display("%d@%h: *%h <= %h", $time, em_pc, stage_mem.addr & ~'b11, stage_mem.real_write_data);
 			fd_pc <= stall ? fd_pc : f_pc;
 			fd_instr <= stall ? fd_instr : f_instr;
 			de_pc <= fd_pc;

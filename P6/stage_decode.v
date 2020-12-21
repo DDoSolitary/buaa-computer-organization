@@ -85,24 +85,62 @@ module stage_decode(
 	assign grf_read_addr0 = rs_addr;
 	assign grf_read_addr1 = rt_addr;
 	assign grf_read_stage0 =
-		beq || bne || blez || bltz || bgez || bgtz || jr || jalr ? `STAGE_DECODE :
-		add || addi || addu || addiu || sub || subu || sllv || srlv || srav || slt || slti || sltu || sltiu || _and || andi || _or || ori || _xor || xori || _nor || lb || lbu || lh || lhu || lw || sb || sh || sw || mult || multu || div || divu || mtlo || mthi ? `STAGE_EXECUTE : `STAGE_MAX;
+			beq || bne || blez || bltz || bgez || bgtz || jr || jalr
+		? `STAGE_DECODE :
+			add || addi || addu || addiu || sub || subu ||
+			sllv || srlv || srav ||
+			slt || slti || sltu || sltiu ||
+			_and || andi || _or || ori || _xor || xori || _nor ||
+			lb || lbu || lh || lhu || lw || sb || sh || sw ||
+			mult || multu || div || divu || mtlo || mthi
+		? `STAGE_EXECUTE : `STAGE_MAX;
 	assign grf_read_stage1 =
-		beq || bne ? `STAGE_DECODE :
-		add || addu || sub || subu || sll || sllv || srl || srlv || sra || srav || slt || sltu || _and || _or || _xor || _nor || mult || multu || div || divu ? `STAGE_EXECUTE :
-		sb || sh || sw ? `STAGE_MEM : `STAGE_MAX;
+			beq || bne ?
+		`STAGE_DECODE :
+			add || addu || sub || subu ||
+			sll || sllv || srl || srlv || sra || srav ||
+			slt || sltu ||
+			_and || _or || _xor || _nor ||
+			mult || multu || div || divu
+		? `STAGE_EXECUTE :
+			sb || sh || sw
+		? `STAGE_MEM : `STAGE_MAX;
 	assign grf_write_addr =
-		add || addu || sub || subu || sll || sllv || srl || srlv || sra || srav || slt || sltu || _and || _or|| _xor || _nor || jalr || mflo || mfhi ? rd_addr :
-		addi || addiu || slti || sltiu || andi || ori || xori || lb || lbu || lh || lhu || lw || lui ? rt_addr :
-		jal ? 31 : 0;
+			add || addu || sub || subu ||
+			sll || sllv || srl || srlv || sra || srav ||
+			slt || sltu ||
+			_and || _or|| _xor || _nor ||
+			jalr ||
+			mflo || mfhi
+		? rd_addr :
+			addi || addiu ||
+			lui ||
+			slti || sltiu ||
+			andi || ori || xori ||
+			lb || lbu || lh || lhu || lw
+		? rt_addr :
+			jal
+		? 31 : 0;
 	assign grf_write_stage =
-		jal || jalr ? `STAGE_DECODE :
-		add || addi || addu || addiu || sub || subu || sll || sllv || srl || srlv || sra || srav || slt || slti || sltu || sltiu || _and || andi || _or || ori || _xor || xori || _nor || lui || mflo || mfhi ? `STAGE_EXECUTE :
-		lb || lbu || lh || lhu || lw ? `STAGE_MEM : 0;
+			jal || jalr
+		? `STAGE_DECODE :
+			add || addi || addu || addiu || sub || subu ||
+			sll || sllv || srl || srlv || sra || srav || lui ||
+			slt || slti || sltu || sltiu ||
+			_and || andi || _or || ori || _xor || xori || _nor ||
+			mflo || mfhi
+		? `STAGE_EXECUTE :
+			lb || lbu || lh || lhu || lw
+		? `STAGE_MEM : 0;
 	assign alu_src0 =
 		lui || sll || srl || sra ? `ALU_SRC0_SA : `ALU_SRC0_RS;
 	assign alu_src1 =
-		addi || addiu || slti || sltiu || andi || ori || xori || lb || lbu || lh || lhu || lw || sb || sh || sw || lui ? `ALU_SRC1_EXT : `ALU_SRC1_RT;
+			addi || addiu ||
+			lui ||
+			slti || sltiu ||
+			andi || ori || xori ||
+			lb || lbu || lh || lhu || lw || sb || sh || sw
+		? `ALU_SRC1_EXT : `ALU_SRC1_RT;
 	assign alu_op =
 		add || addi || addu || addiu || lb || lbu || lh || lhu || lw || sb || sh || sw ? `ALU_OP_ADD :
 		sub || subu ? `ALU_OP_SUB :
@@ -124,7 +162,8 @@ module stage_decode(
 		mtlo ? `ALU_OP_MTLO :
 		mthi ? `ALU_OP_MTHI : 0;
 	assign sa = lui ? 16 : instr[10:6];
-	assign ext_imm = addi || addiu || slti || sltiu || lb || lbu || lh || lhu || lw || sb || sh || sw ? {{16{imm[15]}}, imm} : {16'b0, imm};
+	assign ext_imm = addi || addiu || slti || sltiu || lb || lbu || lh || lhu || lw || sb || sh || sw
+		? {{16{imm[15]}}, imm} : {16'b0, imm};
 	assign mem_write = sb || sh || sw;
 	assign mem_type =
 		lb || lbu || sb ? `MEM_TYPE_BYTE :
