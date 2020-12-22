@@ -4,7 +4,10 @@ test-rand-logs/
 venv/
 *.vcd
 *.zip
+code.asm
 code.txt
+code_handler.asm
+code_handler.txt
 test.asm
 
 # Xilinx ISE

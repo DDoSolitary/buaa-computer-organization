@@ -8,7 +8,7 @@ proj_name="$(basename "$proj_dir")"
 
 cd "$out_dir"
 if [ -f "$proj_name" ]; then
-	cp ../code.txt .
+	cp ../code.txt ../code_handler.txt .
 	vvp "$proj_name"
 	gtkwave "$proj_name.vcd"
 else

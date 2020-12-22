@@ -3,6 +3,7 @@
 module grf #(parameter GRF_SIZE = 32) (
 	input wire clk,
 	input wire reset,
+	input wire [31:0] pc,
 	input wire [4:0] read_addr0,
 	input wire [4:0] read_addr1,
 	input wire [4:0] write_addr,
@@ -18,6 +19,8 @@ module grf #(parameter GRF_SIZE = 32) (
 	always @(posedge clk)
 		if (reset)
 			for (i = 0; i < GRF_SIZE; i = i + 1) regs[i] <= 0;
-		else if (write_addr != 0)
+		else if (write_addr != 0) begin
+			$display("%d@%h: $%d <= %h", $time, pc, write_addr, write_data);
 			regs[write_addr] <= write_data;
+		end
 endmodule

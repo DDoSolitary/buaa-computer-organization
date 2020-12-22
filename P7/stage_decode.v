@@ -3,6 +3,7 @@
 module stage_decode(
 	input wire [31:0] pc,
 	input wire [31:0] instr,
+	input wire [31:0] epc,
 	input wire [31:0] grf_read_data0,
 	input wire [31:0] grf_read_data1,
 	output wire [4:0] grf_read_addr0,
@@ -16,11 +17,15 @@ module stage_decode(
 	output wire [`ALU_OP_LEN - 1:0] alu_op,
 	output wire [4:0] sa,
 	output wire [31:0] ext_imm,
-	output wire mem_write,
 	output wire [`MEM_TYPE_LEN - 1:0] mem_type,
+	output wire [`MEM_MODE_LEN - 1:0] mem_mode,
 	output wire [`REG_EXT_LEN - 1:0] ext_type,
 	output wire check_overflow,
-	output wire [31:0] next_pc
+	output wire [`DS_OP_LEN - 1:0] ds_op,
+	output wire [31:0] next_pc,
+	output wire [`CP0_OP_LEN - 1:0] cp0_op,
+	output wire [4:0] cp0_addr,
+	output wire [`EXC_CODE_LEN - 1:0] exc
 );
 	wire [5:0] op = instr[31:26];
 	wire [4:0] rs_addr = instr[25:21];
@@ -31,6 +36,8 @@ module stage_decode(
 
 	wire op_sp = op == 6'b000000;
 	wire op_regimm = op == 6'b000001;
+	wire op_cp0 = op == 6'b010000;
+	wire nop = instr == 0;
 	wire add = op_sp && func == 6'b100000;
 	wire addi = op == 6'b001000;
 	wire addu = op_sp && func == 6'b100001;
@@ -39,8 +46,8 @@ module stage_decode(
 	wire subu = op_sp && func == 6'b100011;
 	wire sll = op_sp && func == 6'b000000;
 	wire sllv = op_sp && func == 6'b000100;
-	wire srlv = op_sp && func == 6'b000110;
 	wire srl = op_sp && func == 6'b000010;
+	wire srlv = op_sp && func == 6'b000110;
 	wire sra = op_sp && func == 6'b000011;
 	wire srav = op_sp && func == 6'b000111;
 	wire slt = op_sp && func == 6'b101010;
@@ -81,6 +88,9 @@ module stage_decode(
 	wire mfhi = op_sp && func == 6'b010000;
 	wire mtlo = op_sp && func == 6'b010011;
 	wire mthi = op_sp && func == 6'b010001;
+	wire mfc0 = op_cp0 && rs_addr == 6'b00000;
+	wire mtc0 = op_cp0 && rs_addr == 6'b00100;
+	wire eret = op_cp0 && instr[25];
 
 	assign grf_read_addr0 = rs_addr;
 	assign grf_read_addr1 = rt_addr;
@@ -103,7 +113,8 @@ module stage_decode(
 			_and || _or || _xor || _nor ||
 			mult || multu || div || divu
 		? `STAGE_EXECUTE :
-			sb || sh || sw
+			sb || sh || sw ||
+			mtc0
 		? `STAGE_MEM : `STAGE_MAX;
 	assign grf_write_addr =
 			add || addu || sub || subu ||
@@ -117,7 +128,8 @@ module stage_decode(
 			lui ||
 			slti || sltiu ||
 			andi || ori || xori ||
-			lb || lbu || lh || lhu || lw
+			lb || lbu || lh || lhu || lw ||
+			mfc0
 		? rt_addr :
 			jal
 		? 31 : 0;
@@ -130,7 +142,8 @@ module stage_decode(
 			_and || andi || _or || ori || _xor || xori || _nor ||
 			mflo || mfhi
 		? `STAGE_EXECUTE :
-			lb || lbu || lh || lhu || lw
+			lb || lbu || lh || lhu || lw ||
+			mfc0
 		? `STAGE_MEM : 0;
 	assign alu_src0 =
 		lui || sll || srl || sra ? `ALU_SRC0_SA : `ALU_SRC0_RS;
@@ -164,17 +177,22 @@ module stage_decode(
 	assign sa = lui ? 16 : instr[10:6];
 	assign ext_imm = addi || addiu || slti || sltiu || lb || lbu || lh || lhu || lw || sb || sh || sw
 		? {{16{imm[15]}}, imm} : {16'b0, imm};
-	assign mem_write = sb || sh || sw;
 	assign mem_type =
 		lb || lbu || sb ? `MEM_TYPE_BYTE :
 		lh || lhu || sh ? `MEM_TYPE_HALF :
 		lw || sw ? `MEM_TYPE_WORD : 0;
+	assign mem_mode =
+		lb || lbu || lh || lhu || lw ? `MEM_MODE_READ :
+		sb || sh || sw ? `MEM_MODE_WRITE : `MEM_MODE_NONE;
 	assign ext_type =
 		lb ? `REG_EXT_BYTE :
 		lbu ? `REG_EXT_BYTE_U :
 		lh ? `REG_EXT_HALF :
 		lhu ? `REG_EXT_HALF_U : `REG_EXT_NONE;
 	assign check_overflow = add || addi || sub;
+	assign ds_op =
+		beq || bne || blez || bltz || bgez || bgtz || j || jal || jr || jalr ? `DS_OP_SET :
+		eret ? `DS_OP_CLEAR : `DS_OP_NONE;
 
 	wire [31:0] branch_target = $signed(pc) + $signed({instr[15:0], 2'b0});
 	wire should_branch =
@@ -187,5 +205,19 @@ module stage_decode(
 	assign next_pc =
 		should_branch ? branch_target :
 		j || jal ? pc[31:28] | {instr[25:0], 2'b0} :
-		jr || jalr ? grf_read_data0 : pc + 4;
+		jr || jalr ? grf_read_data0 :
+		eret ? epc : pc + 4;
+
+	assign cp0_op =
+		mfc0 ? `CP0_OP_MFC0 :
+		mtc0 ? `CP0_OP_MTC0 :
+		eret ? `CP0_OP_ERET : `CP0_OP_NONE;
+	assign cp0_addr = rd_addr;
+
+	assign exc =
+			nop || add || addi || addu || addiu || sub || subu || sll || sllv || srl || srlv || sra || srav || slt ||
+			slti || sltu || sltiu || _and || andi || _or || ori || _xor || xori || _nor || lb || lbu || lh || lhu ||
+			lw || sb || sh || sw || beq || bne || blez || bltz || bgez || bgtz || lui || j || jal || jr || jalr ||
+			mult || multu || div || divu || mflo || mfhi || mtlo || mthi || mfc0 || mtc0 || eret
+		? 0 : `EXC_CODE_RI;
 endmodule
