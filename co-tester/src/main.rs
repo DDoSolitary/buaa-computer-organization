@@ -193,6 +193,7 @@ async fn main() {
 			for (i, subject_line) in subject_log.lines().enumerate() {
 				match subject_line.parse::<LogEntry>() {
 					Ok(LogEntry::Grf(grf_entry)) => {
+						if grf_entry.addr() == 0 { continue; }
 						if let Some(std_entry) = machine.grf_log().get(grf_id) {
 							if grf_entry != *std_entry {
 								return Err(TestFailureError::new(format!(
