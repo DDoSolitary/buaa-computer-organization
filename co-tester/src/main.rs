@@ -174,18 +174,17 @@ async fn main() {
 		File::create(dir_path.join("code.txt")).await.unwrap().write_all(&code_data).await.unwrap();
 		File::create(dir_path.join("std-grf.log")).await.unwrap().write_all(&grf_log_data).await.unwrap();
 		File::create(dir_path.join("std-mem.log")).await.unwrap().write_all(&mem_log_data).await.unwrap();
-		let vvp_res = Command::new("vvp")
-			.arg(std::env::current_dir().unwrap().join(subject_path))
+		let subject_res = Command::new(std::fs::canonicalize(subject_path).unwrap())
 			.current_dir(dir_path)
 			.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())
 			.output().await.unwrap();
-		File::create(dir_path.join("subject.log")).await.unwrap().write_all(&vvp_res.stdout).await.unwrap();
+		File::create(dir_path.join("subject.log")).await.unwrap().write_all(&subject_res.stdout).await.unwrap();
 		let res = tokio::task::spawn_blocking(move || {
-			let subject_log = String::from_utf8_lossy(&vvp_res.stdout);
-			if !vvp_res.status.success() {
+			let subject_log = String::from_utf8_lossy(&subject_res.stdout);
+			if !subject_res.status.success() {
 				return Err(TestFailureError::new(format!(
 					"failed to run the test subject.\nstdout:\n{}\nstderr:\n{}",
-					subject_log, String::from_utf8_lossy(&vvp_res.stderr),
+					subject_log, String::from_utf8_lossy(&subject_res.stderr),
 				)));
 			}
 			let mut grf_id = 0;
