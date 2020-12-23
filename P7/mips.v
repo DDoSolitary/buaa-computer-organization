@@ -209,7 +209,7 @@ module mips(
 		.Addr(br_dev_addr[31:2]),
 		.WE(timer0_write_enable),
 		.Din(m_read_data),
-		.Dout(br_read_data),
+		.Dout(timer0_read_data),
 		.IRQ(timer0_irq)
 	);
 
@@ -218,7 +218,7 @@ module mips(
 		.Addr(br_dev_addr[31:2]),
 		.WE(timer1_write_enable),
 		.Din(m_read_data),
-		.Dout(br_read_data),
+		.Dout(timer1_read_data),
 		.IRQ(timer1_irq)
 	);
 
