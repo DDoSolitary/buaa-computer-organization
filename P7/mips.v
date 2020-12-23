@@ -124,8 +124,8 @@ module mips(
 	assign cp0_hw_int = {3'b0, interrupt, timer1_irq, timer0_irq};
 
 	assign f_next_pc =
-		stall ? f_pc :
-		cp0_int_req ? stage_fetch.ADDR_HANDLER : d_next_pc;
+		cp0_int_req ? stage_fetch.ADDR_HANDLER :
+		stall ? f_pc : d_next_pc;
 
 	stage_fetch stage_fetch(
 		.clk(clk), .reset(reset),
@@ -190,7 +190,7 @@ module mips(
 	cp0 cp0(
 		.clk(clk), .reset(reset),
 		.addr(em_cp0_addr), .write_data(em_read_data),
-		.bd(cp0_bd), .epc_in(em_pc), .exc(cp0_exc), .hw_int(cp0_hw_int), .op(em_cp0_op),
+		.bd(cp0_bd), .epc_in(addr), .exc(cp0_exc), .hw_int(cp0_hw_int), .op(em_cp0_op),
 		.int_req(cp0_int_req), .epc_out(cp0_epc), .read_data(cp0_read_data)
 	);
 
@@ -269,7 +269,9 @@ module mips(
 			mw_ext_type <= 0;
 		end else begin
 			fd_stage_stat <=
-				d_ds_op == `DS_OP_CLEAR || cp0_int_req ? `STAGE_STAT_EMPTY :
+				cp0_int_req ? `STAGE_STAT_EMPTY :
+				stall ? fd_stage_stat :
+				d_ds_op == `DS_OP_CLEAR ? `STAGE_STAT_EMPTY :
 				d_ds_op == `DS_OP_NONE ? `STAGE_STAT_NORMAL :
 				d_ds_op == `DS_OP_SET ? `STAGE_STAT_DS : 0;
 			fd_pc <= stall ? fd_pc : f_pc;
@@ -277,7 +279,7 @@ module mips(
 				cp0_int_req ? 0 :
 				stall ? fd_instr :
 				d_ds_op == `DS_OP_CLEAR ? 0 : f_instr;
-			fd_exc <= cp0_int_req ? 0 : f_exc;
+			fd_exc <= cp0_int_req ? 0 : stall ? fd_exc : f_exc;
 			de_stage_stat <= cp0_int_req ? `STAGE_STAT_EMPTY : fd_stage_stat;
 			de_pc <= fd_pc;
 			de_read_addr0 <= d_read_addr0;
