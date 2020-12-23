@@ -80,7 +80,7 @@ pub struct InstructionGenerator<'a> {
 	machine: &'a mut MipsMachine,
 	instr_set: &'a [InstructionType],
 	instr_set_no_branch: Vec<InstructionType>,
-	text_limit: u32,
+	jump_limit: u32,
 	rng: ThreadRng,
 	grf_addr_dist: Uniform<u8>,
 	grf_addr_excluded_dist: Uniform<u8>,
@@ -98,7 +98,7 @@ impl<'a> InstructionGenerator<'a> {
 			instr_set_no_branch: instr_set.iter()
 				.filter_map(|x| if x.is_branch() { None } else { Some(*x) })
 				.collect(),
-			text_limit: TEXT_START_ADDR + instr_count * WORD_SIZE as u32,
+			jump_limit: TEXT_START_ADDR + instr_count * WORD_SIZE as u32,
 			rng: rand::thread_rng(),
 			grf_addr_dist: Uniform::new(0, GRF_SIZE as u8),
 			grf_addr_excluded_dist: Uniform::new(0, GRF_SIZE as u8 - 1),
@@ -137,12 +137,17 @@ impl<'a> InstructionGenerator<'a> {
 	}
 
 	fn gen_base_and_offset(&mut self, addr_mask: u32) -> (u8, i16) {
-		let addr = self.gen_mem_read_addr() & addr_mask;
-		let candidates = self.machine.grf().iter().enumerate().filter_map(|(id, value)| {
+		let allow_exc = self.rng.gen_bool(0.2);
+		let addr = self.gen_mem_read_addr();
+		let addr = if allow_exc { addr } else { addr & addr_mask };
+		let grf = *self.machine.grf();
+		let candidates = grf.iter().enumerate().filter_map(|(id, value)| {
 			let offset = addr as i64 - *value as i64;
 			let offset_i16 = offset as i16;
 			if offset_i16 as i64 == offset {
 				Some((id as u8, offset_i16))
+			} else if allow_exc {
+				Some((id as u8, self.rng.sample(&self.imm_dist) as i16))
 			} else {
 				None
 			}
@@ -159,24 +164,15 @@ impl<'a> InstructionGenerator<'a> {
 	fn gen_branch_offset(&mut self) -> i16 {
 		let offset = (self.rng.sample(&self.branch_dist) as i16).abs();
 		let addr = self.machine.pc() + (offset as u32 + 1) * WORD_SIZE as u32;
-		if addr < self.text_limit {
+		if addr < self.jump_limit {
 			offset
 		} else {
-			((self.text_limit - self.machine.pc() - 1) / WORD_SIZE as u32) as i16
+			((self.jump_limit - self.machine.pc() - 1) / WORD_SIZE as u32) as i16
 		}
 	}
 
 	fn gen_jump_addr(&mut self) -> u32 {
 		self.machine.pc() / WORD_SIZE as u32 + self.gen_branch_offset() as u32 + 1
-	}
-
-	fn gen_grf_load_addr(&mut self, base: u8) -> u8 {
-		if self.machine.state() == MachineState::InDelaySlot(self.machine.pc()) {
-			let addr = self.rng.sample(&self.grf_addr_excluded_dist);
-			if addr >= base { addr + 1 } else { addr }
-		} else {
-			self.rng.sample(&self.grf_addr_dist)
-		}
 	}
 }
 
@@ -184,15 +180,19 @@ impl Iterator for InstructionGenerator<'_> {
 	type Item = Box<dyn Instruction>;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		if self.machine.pc() >= self.text_limit { return None; }
+		if self.machine.pc() >= self.jump_limit { return None; }
+		if self.rng.gen_bool(0.1) {
+			self.machine.interrupt();
+		}
+		let allow_unaligned_jr = self.rng.gen_bool(0.1);
 		let jr_candidates = self.machine.grf().iter().enumerate()
 			.filter_map(|(i, x)| {
-				let is_in_range = (self.machine.pc() + 1..self.text_limit).contains(x);
+				let is_in_range = (self.machine.pc() + 1..self.jump_limit).contains(x);
 				let is_aligned = x / WORD_SIZE as u32 * WORD_SIZE as u32 == *x;
-				if is_in_range && is_aligned { Some(i as u8) } else { None }
+				if is_in_range && (allow_unaligned_jr || is_aligned) { Some(i as u8) } else { None }
 			})
 			.collect::<Vec<_>>();
-		let is_last_instr = self.machine.pc() + WORD_SIZE as u32 == self.text_limit;
+		let is_last_instr = self.machine.pc() + WORD_SIZE as u32 == self.jump_limit;
 		let instr_type = match (self.machine.state(), is_last_instr) {
 			(MachineState::InDelaySlot(_), _) | (_, true) => *self.rng.rand_select(&self.instr_set_no_branch),
 			_ => {
@@ -330,7 +330,7 @@ impl Iterator for InstructionGenerator<'_> {
 				let (base, offset) = self.gen_base_and_offset(!0);
 				Box::new(LbInstr {
 					base,
-					rt: self.gen_grf_load_addr(base),
+					rt: self.rng.sample(&self.grf_addr_dist),
 					offset,
 				})
 			}
@@ -338,7 +338,7 @@ impl Iterator for InstructionGenerator<'_> {
 				let (base, offset) = self.gen_base_and_offset(!0);
 				Box::new(LbuInstr {
 					base,
-					rt: self.gen_grf_load_addr(base),
+					rt: self.rng.sample(&self.grf_addr_dist),
 					offset,
 				})
 			}
@@ -346,7 +346,7 @@ impl Iterator for InstructionGenerator<'_> {
 				let (base, offset) = self.gen_base_and_offset(!0b1);
 				Box::new(LhInstr {
 					base,
-					rt: self.gen_grf_load_addr(base),
+					rt: self.rng.sample(&self.grf_addr_dist),
 					offset,
 				})
 			}
@@ -354,7 +354,7 @@ impl Iterator for InstructionGenerator<'_> {
 				let (base, offset) = self.gen_base_and_offset(!0b1);
 				Box::new(LhuInstr {
 					base,
-					rt: self.gen_grf_load_addr(base),
+					rt: self.rng.sample(&self.grf_addr_dist),
 					offset,
 				})
 			}
@@ -362,7 +362,7 @@ impl Iterator for InstructionGenerator<'_> {
 				let (base, offset) = self.gen_base_and_offset(!0b11);
 				Box::new(LwInstr {
 					base,
-					rt: self.gen_grf_load_addr(base),
+					rt: self.rng.sample(&self.grf_addr_dist),
 					offset,
 				})
 			}

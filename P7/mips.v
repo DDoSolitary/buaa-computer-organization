@@ -324,16 +324,30 @@ endmodule
 
 module mips_test();
 	reg clk = 0, reset;
+	reg [3:0] interrupt_count;
+	reg irqs [2047:0];
+	wire interrupt = interrupt_count > 0;
+	wire [31:0] addr;
+	wire [31:0] instr_id = (addr - 'h3000) / 4;
+
 	always #5 clk = ~clk;
-	mips uut(.clk(clk), .reset(reset), .interrupt(1'b0));
+
+	mips uut(.clk(clk), .reset(reset), .interrupt(interrupt), .addr(addr));
 
 	initial begin
 		$dumpfile("P7.vcd");
-		$dumpvars(0, uut);
+		$dumpvars(0, mips_test);
+		$readmemb("irqs.txt", irqs);
 		reset = 1;
+		interrupt_count = 0;
 		#10;
 		reset = 0;
-		while (!(uut.cp0.op == `CP0_OP_ERET && (uut.cp0.epc < 'h3000 || uut.cp0.epc >= 'h5000))) #10;
+		while (!(uut.cp0.op == `CP0_OP_ERET && (uut.cp0.epc < 'h3000 || uut.cp0.epc >= 'h5000))) begin
+			if (interrupt_count > 0) interrupt_count = interrupt_count - 1;
+			if (irqs[instr_id]) interrupt_count = 10;
+			irqs[instr_id] = 0;
+			#10;
+		end
 		#10;
 		$finish();
 	end

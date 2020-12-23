@@ -35,7 +35,9 @@ use tokio::signal::unix::{SignalKind, signal};
 
 use gen::{InstructionType, InstructionGenerator};
 use log::LogEntry;
-use machine::MipsMachine;
+use machine::{MipsMachine, Instruction, JInstr};
+
+const HANDLER_CODE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/code_handler.txt"));
 
 #[derive(Debug)]
 struct TestFailureError {
@@ -90,15 +92,18 @@ async fn main() {
 		.arg(clap::Arg::with_name("no-db")
 			.long("no-db")
 			.help("Disable delayed branching."))
+		.arg(clap::Arg::with_name("no-exc")
+			.long("no-exc")
+			.help("Disable exception handling and ignore problematic instructions."))
 		.arg(clap::Arg::with_name("mem-size")
 			.long("mem-size")
 			.takes_value(true)
-			.default_value("4096")
+			.default_value("3072")
 			.help("Size of data memory in 4-byte words."))
 		.arg(clap::Arg::with_name("instr-count")
 			.long("instr-count")
 			.takes_value(true)
-			.default_value("4096")
+			.default_value("1118")
 			.help("Number of instructions to generate per test case."))
 		.arg(clap::Arg::with_name("fail-fast")
 			.long("fail-fast")
@@ -118,6 +123,7 @@ async fn main() {
 	let test_count = matches.value_of("count").unwrap().parse::<u32>().unwrap();
 	let thread_count = matches.value_of("threads").unwrap().parse::<usize>().unwrap();
 	let no_db = matches.is_present("no-db");
+	let no_exc = matches.is_present("no-exc");
 	let mem_size = matches.value_of("mem-size").unwrap().parse::<usize>().unwrap();
 	let instr_count = matches.value_of("instr-count").unwrap().parse::<u32>().unwrap();
 	let fail_fast = matches.is_present("fail-fast");
@@ -151,14 +157,20 @@ async fn main() {
 		let instr_set = Arc::clone(&instr_set);
 		let dir = tempfile::Builder::new().prefix("co-tester-").tempdir_in(tmp_dir).unwrap();
 		let dir_path = dir.path();
-		let (asm_data, code_data, grf_log_data, mem_log_data, machine) =
+		let (asm_data, code_data, grf_log_data, mem_log_data, irq_log_data, machine) =
 			tokio::task::spawn_blocking(move || {
 				let mut asm_data = Vec::new();
 				let mut code_data = Vec::new();
-				let mut machine = MipsMachine::new(!no_db, mem_size);
+				let mut machine = MipsMachine::new(!no_db, !no_exc, mem_size);
 				for instr in InstructionGenerator::new(&mut machine, &instr_set, instr_count) {
 					asm_data.extend(format!("{}\n", instr).as_bytes());
 					code_data.extend(format!("{:08x}\n", instr.to_machine_code()).as_bytes());
+				}
+				if !no_exc {
+					machine.force_exception(0x10000, 4);
+					let instr = JInstr { addr: 16384 };
+					asm_data.extend(format!("{}\nnop\n", instr).as_bytes());
+					code_data.extend(format!("{:08x}\n00000000\n", instr.to_machine_code()).as_bytes());
 				}
 				let mut grf_log_data = Vec::new();
 				for log in machine.grf_log() {
@@ -168,10 +180,18 @@ async fn main() {
 				for log in machine.mem_log() {
 					mem_log_data.extend(format!("{}\n", log).as_bytes());
 				}
-				(asm_data, code_data, grf_log_data, mem_log_data, machine)
+				let mut irq_log_data = Vec::new();
+				for i in 0..instr_count {
+					let addr = i * machine::WORD_SIZE as u32 + machine::TEXT_START_ADDR;
+					let flag = if machine.irq_log().contains(&addr) { 1 } else { 0 };
+					irq_log_data.extend(format!("{}\n", flag).as_bytes());
+				}
+				(asm_data, code_data, grf_log_data, mem_log_data, irq_log_data, machine)
 			}).await.unwrap();
 		File::create(dir_path.join("test.asm")).await.unwrap().write_all(&asm_data).await.unwrap();
 		File::create(dir_path.join("code.txt")).await.unwrap().write_all(&code_data).await.unwrap();
+		File::create(dir_path.join("code_handler.txt")).await.unwrap().write_all(HANDLER_CODE).await.unwrap();
+		File::create(dir_path.join("irqs.txt")).await.unwrap().write_all(&irq_log_data).await.unwrap();
 		File::create(dir_path.join("std-grf.log")).await.unwrap().write_all(&grf_log_data).await.unwrap();
 		File::create(dir_path.join("std-mem.log")).await.unwrap().write_all(&mem_log_data).await.unwrap();
 		let subject_res = Command::new(std::fs::canonicalize(subject_path).unwrap())

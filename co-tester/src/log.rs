@@ -23,7 +23,9 @@ impl GrfLogEntry {
 		Self { pc, addr, data }
 	}
 
+	pub fn pc(&self) -> u32 { self.pc }
 	pub fn addr(&self) -> u8 { self.addr }
+	pub fn data(&self) -> u32 { self.data }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]

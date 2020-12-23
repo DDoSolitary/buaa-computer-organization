@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter};
 use std::mem;
 
@@ -6,6 +7,7 @@ use super::log::{GrfLogEntry, MemLogEntry};
 pub const WORD_SIZE: usize = mem::size_of::<u32>();
 pub const GRF_SIZE: usize = 32;
 pub const TEXT_START_ADDR: u32 = 0x3000;
+const HANDLER_ADDR: u32 = 0x4180;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum MachineState {
@@ -16,6 +18,7 @@ pub enum MachineState {
 
 pub struct MipsMachine {
 	delayed_branching: bool,
+	exception_enabled: bool,
 	pc: u32,
 	state: MachineState,
 	grf: Box<[u32; GRF_SIZE]>,
@@ -24,12 +27,15 @@ pub struct MipsMachine {
 	mem: Vec<u32>,
 	grf_log: Vec<GrfLogEntry>,
 	mem_log: Vec<MemLogEntry>,
+	irq_log: HashSet<u32>,
+	exception_occurred: bool,
 }
 
 impl MipsMachine {
-	pub fn new(delayed_branching: bool, mem_size: usize) -> Self {
+	pub fn new(delayed_branching: bool, exception_enabled: bool, mem_size: usize) -> Self {
 		Self {
 			delayed_branching,
+			exception_enabled,
 			pc: TEXT_START_ADDR,
 			state: MachineState::Normal,
 			grf: Box::new([0u32; GRF_SIZE]),
@@ -38,6 +44,8 @@ impl MipsMachine {
 			mem: vec![0u32; mem_size],
 			grf_log: Vec::new(),
 			mem_log: Vec::new(),
+			irq_log: HashSet::new(),
+			exception_occurred: false,
 		}
 	}
 
@@ -47,55 +55,13 @@ impl MipsMachine {
 	pub fn mem(&self) -> &[u32] { &self.mem }
 	pub fn grf_log(&self) -> &[GrfLogEntry] { &self.grf_log }
 	pub fn mem_log(&self) -> &[MemLogEntry] { &self.mem_log }
+	pub fn irq_log(&self) -> &HashSet<u32> { &self.irq_log }
 
 	fn get_word_addr(addr: u32) -> usize {
 		let addr = addr as usize;
 		let word_addr = addr / WORD_SIZE;
 		debug_assert_eq!(word_addr * WORD_SIZE, addr);
 		word_addr
-	}
-
-	pub fn execute<T: Instruction + ?Sized>(&mut self, instr: &T) {
-		match self.state {
-			MachineState::Normal => {
-				let res = instr.execute_on(self);
-				self.pc += WORD_SIZE as u32;
-				match res {
-					BranchResult::None => (),
-					BranchResult::No => self.state = MachineState::InDelaySlot(self.pc + WORD_SIZE as u32),
-					BranchResult::Yes(target) => {
-						debug_assert!(target >= self.pc);
-						Self::get_word_addr(target);
-						if self.delayed_branching {
-							self.state = MachineState::InDelaySlot(target);
-						} else if target > self.pc {
-							self.state = MachineState::Branching(target);
-						}
-					}
-				}
-			}
-			MachineState::InDelaySlot(target) => {
-				debug_assert!(self.delayed_branching);
-				let res = instr.execute_on(self);
-				debug_assert_eq!(res, BranchResult::None);
-				if target == self.pc {
-					let res = instr.execute_on(self);
-					debug_assert_eq!(res, BranchResult::None);
-				}
-				self.pc += WORD_SIZE as u32;
-				if target <= self.pc {
-					self.state = MachineState::Normal
-				} else {
-					self.state = MachineState::Branching(target)
-				}
-			}
-			MachineState::Branching(target) => {
-				self.pc += WORD_SIZE as u32;
-				if target == self.pc {
-					self.state = MachineState::Normal
-				}
-			}
-		};
 	}
 
 	fn read_grf(&self, addr: u8) -> u32 {
@@ -116,6 +82,152 @@ impl MipsMachine {
 	fn write_mem(&mut self, addr: u32, data: u32) {
 		self.mem[Self::get_word_addr(addr)] = data;
 		self.mem_log.push(MemLogEntry::new(self.pc, addr, data));
+	}
+
+	fn handle_exception(&mut self, exc_code: u8, irq_no: Option<u8>) {
+		if !self.exception_enabled { return; }
+		if exc_code != 0 { self.exception_occurred = true; }
+		let old_pc = self.pc;
+		self.pc = HANDLER_ADDR;
+		self.write_mem(0, self.read_grf(1));
+		self.pc += WORD_SIZE as u32;
+		self.write_mem(1 * WORD_SIZE as u32, self.read_grf(2));
+		self.pc += WORD_SIZE as u32;
+		let cause = if let Some(irq_no) = irq_no { 1 << (irq_no as u32 + 8) } else { 0 } | ((exc_code as u32) << 2);
+		if let MachineState::InDelaySlot(_) = self.state {
+			self.write_grf(1, (1 << 31) | cause);
+			self.pc += WORD_SIZE as u32;
+			self.write_grf(2, old_pc - WORD_SIZE as u32);
+			self.pc += WORD_SIZE as u32;
+		} else {
+			self.write_grf(1, cause);
+			self.pc += WORD_SIZE as u32;
+			self.write_grf(2, old_pc);
+			self.pc += WORD_SIZE as u32;
+		}
+		self.write_mem(2 * WORD_SIZE as u32, self.read_grf(3));
+		self.pc += WORD_SIZE as u32;
+		self.write_grf(3, 0x1003);
+		self.pc += WORD_SIZE as u32;
+		self.write_mem(3 * WORD_SIZE as u32, self.read_grf(4));
+		self.pc += WORD_SIZE as u32;
+		self.write_grf(4, 0xdeadbeaf);
+		self.pc += WORD_SIZE as u32;
+		for i in 5u8..32 {
+			self.write_mem((i as u32 - 1) * WORD_SIZE as u32, self.read_grf(i));
+			self.pc += WORD_SIZE as u32;
+		}
+		self.write_grf(1, self.read_grf(1) & 124);
+		self.pc += WORD_SIZE as u32 * 3;
+		if self.read_grf(1) != 0 {
+			self.write_grf(1, self.lo);
+			self.pc += WORD_SIZE as u32;
+			self.write_mem(31 * WORD_SIZE as u32, self.lo);
+			self.pc += WORD_SIZE as u32;
+			self.write_grf(1, self.hi);
+			self.pc += WORD_SIZE as u32;
+			self.write_mem(32 * WORD_SIZE as u32, self.hi);
+			self.pc += WORD_SIZE as u32;
+			self.write_grf(2, self.read_grf(2) + 4);
+			self.pc += WORD_SIZE as u32 * 2;
+			self.write_grf(1, self.lo);
+			self.pc += WORD_SIZE as u32 * 2;
+			self.write_grf(1, self.hi);
+			self.pc += WORD_SIZE as u32 * 2;
+		} else {
+			self.pc += WORD_SIZE as u32 * 10;
+		}
+		for i in 1u8..32 {
+			self.write_grf(i, self.read_mem(((i - 1) * 4) as u32));
+			self.pc += WORD_SIZE as u32;
+		}
+		self.pc = old_pc;
+	}
+
+	fn check_branch_target(&mut self, target: u32) {
+		if target & 0b11 != 0 {
+			self.force_exception(target & !0b11, 4);
+		}
+	}
+
+	pub fn execute<T: Instruction + ?Sized>(&mut self, instr: &T) {
+		match self.state {
+			MachineState::Normal => {
+				let res = instr.execute_on(self);
+				self.pc += WORD_SIZE as u32;
+				match res {
+					BranchResult::None => (),
+					BranchResult::No => {
+						self.state = if self.delayed_branching {
+							MachineState::InDelaySlot(self.pc + WORD_SIZE as u32)
+						} else {
+							MachineState::Normal
+						};
+					}
+					BranchResult::Yes(target) => {
+						debug_assert!(target > self.pc - WORD_SIZE as u32);
+						if self.delayed_branching {
+							self.state = MachineState::InDelaySlot(target);
+						} else if target > self.pc {
+							self.state = MachineState::Branching(target);
+						} else {
+							self.check_branch_target(target);
+						}
+					}
+				}
+			}
+			MachineState::InDelaySlot(target) => {
+				debug_assert!(self.delayed_branching);
+				let res = instr.execute_on(self);
+				debug_assert_eq!(res, BranchResult::None);
+				if self.exception_occurred {
+					self.state = MachineState::Normal;
+					let res = instr.execute_on(self);
+					debug_assert_eq!(res, BranchResult::None);
+				} else if target <= self.pc + WORD_SIZE as u32 {
+					self.state = MachineState::Normal;
+					self.check_branch_target(target);
+					if target <= self.pc {
+						let res = instr.execute_on(self);
+						debug_assert_eq!(res, BranchResult::None);
+					}
+				} else {
+					self.state = MachineState::Branching(target)
+				}
+				self.pc += WORD_SIZE as u32;
+			}
+			MachineState::Branching(target) => {
+				self.pc += WORD_SIZE as u32;
+				if target <= self.pc {
+					self.state = MachineState::Normal;
+					self.check_branch_target(target);
+				}
+			}
+		};
+		self.exception_occurred = false;
+	}
+
+	pub fn force_exception(&mut self, pc: u32, exc_code: u8) {
+		let old_pc = self.pc;
+		self.pc = pc;
+		self.handle_exception(exc_code, None);
+		self.pc = old_pc;
+	}
+
+	pub fn interrupt(&mut self) {
+		if !matches!(self.state, MachineState::Branching(_)) {
+			let last_grf_log = self.grf_log.last().cloned();
+			self.irq_log.insert(self.pc);
+			self.handle_exception(0, Some(4));
+			if let (MachineState::InDelaySlot(_), Some(last_grf_log)) = (self.state, last_grf_log) {
+				if last_grf_log.pc() == self.pc - WORD_SIZE as u32 {
+					let old_pc = self.pc;
+					self.pc = last_grf_log.pc();
+					self.write_grf(last_grf_log.addr(), last_grf_log.data());
+					self.pc = old_pc;
+				}
+			}
+		}
 	}
 }
 
@@ -189,6 +301,8 @@ impl Instruction for AddInstr {
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		if let Some(res) = i32::checked_add(machine.read_grf(self.rs) as i32, machine.read_grf(self.rt) as i32) {
 			machine.write_grf(self.rd, res as u32);
+		} else {
+			machine.handle_exception(12, None);
 		}
 		BranchResult::None
 	}
@@ -215,6 +329,8 @@ impl Instruction for AddiInstr {
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		if let Some(res) = i32::checked_add(machine.read_grf(self.rs) as i32, self.imm as i32) {
 			machine.write_grf(self.rt, res as u32);
+		} else {
+			machine.handle_exception(12, None);
 		}
 		BranchResult::None
 	}
@@ -295,6 +411,8 @@ impl Instruction for SubInstr {
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		if let Some(res) = i32::checked_sub(machine.read_grf(self.rs) as i32, machine.read_grf(self.rt) as i32) {
 			machine.write_grf(self.rd, res as u32);
+		} else {
+			machine.handle_exception(12, None);
 		}
 		BranchResult::None
 	}
@@ -814,8 +932,12 @@ impl Instruction for LbInstr {
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
-		let mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
-		machine.write_grf(self.rt, mem_bytes[(addr & 0b11) as usize] as i8 as u32);
+		if (addr as usize) >> 2 < machine.mem.len() {
+			let mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
+			machine.write_grf(self.rt, mem_bytes[(addr & 0b11) as usize] as i8 as u32);
+		} else {
+			machine.handle_exception(4, None);
+		}
 		BranchResult::None
 	}
 }
@@ -840,8 +962,12 @@ impl Instruction for LbuInstr {
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
-		let mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
-		machine.write_grf(self.rt, mem_bytes[(addr & 0b11) as usize] as u32);
+		if (addr as usize) >> 2 < machine.mem.len() {
+			let mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
+			machine.write_grf(self.rt, mem_bytes[(addr & 0b11) as usize] as u32);
+		} else {
+			machine.handle_exception(4, None);
+		}
 		BranchResult::None
 	}
 }
@@ -866,11 +992,13 @@ impl Instruction for LhInstr {
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
-		if addr & 0b1 == 0 {
+		if addr & 0b1 == 0 && (addr as usize) >> 2 < machine.mem.len() {
 			let mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
 			let byte_offset = (addr & 0b10) as usize;
 			let data_bytes = [mem_bytes[byte_offset], mem_bytes[byte_offset + 1]];
 			machine.write_grf(self.rt, i16::from_le_bytes(data_bytes) as u32);
+		} else {
+			machine.handle_exception(4, None);
 		}
 		BranchResult::None
 	}
@@ -896,11 +1024,13 @@ impl Instruction for LhuInstr {
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
-		if addr & 0b1 == 0 {
+		if addr & 0b1 == 0 && (addr as usize) >> 2 < machine.mem.len() {
 			let mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
 			let byte_offset = (addr & 0b10) as usize;
 			let data_bytes = [mem_bytes[byte_offset], mem_bytes[byte_offset + 1]];
 			machine.write_grf(self.rt, u16::from_le_bytes(data_bytes) as u32);
+		} else {
+			machine.handle_exception(4, None);
 		}
 		BranchResult::None
 	}
@@ -926,8 +1056,10 @@ impl Instruction for LwInstr {
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
-		if addr & 0b11 == 0 {
+		if addr & 0b11 == 0 && (addr as usize) >> 2 < machine.mem.len() {
 			machine.write_grf(self.rt, machine.read_mem(addr));
+		} else {
+			machine.handle_exception(4, None);
 		}
 		BranchResult::None
 	}
@@ -953,9 +1085,13 @@ impl Instruction for SbInstr {
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
-		let mut mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
-		mem_bytes[(addr & 0b11) as usize] = machine.read_grf(self.rt) as u8;
-		machine.write_mem(addr & !0b11, u32::from_le_bytes(mem_bytes));
+		if (addr as usize) >> 2 < machine.mem.len() {
+			let mut mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
+			mem_bytes[(addr & 0b11) as usize] = machine.read_grf(self.rt) as u8;
+			machine.write_mem(addr & !0b11, u32::from_le_bytes(mem_bytes));
+		} else {
+			machine.handle_exception(5, None);
+		}
 		BranchResult::None
 	}
 }
@@ -980,13 +1116,15 @@ impl Instruction for ShInstr {
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
-		if addr & 0b1 == 0 {
+		if addr & 0b1 == 0 && (addr as usize) >> 2 < machine.mem.len() {
 			let mut mem_bytes = machine.read_mem(addr & !0b11).to_le_bytes();
 			let data_bytes = machine.read_grf(self.rt).to_le_bytes();
 			let byte_offset = (addr & 0b10) as usize;
 			mem_bytes[byte_offset] = data_bytes[0];
 			mem_bytes[byte_offset + 1] = data_bytes[1];
 			machine.write_mem(addr & !0b11, u32::from_le_bytes(mem_bytes));
+		} else {
+			machine.handle_exception(5, None);
 		}
 		BranchResult::None
 	}
@@ -1012,8 +1150,10 @@ impl Instruction for SwInstr {
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		let addr = u32::wrapping_add(machine.read_grf(self.base), self.offset as u32);
-		if addr & 0b11 == 0 {
+		if addr & 0b11 == 0 && (addr as usize) >> 2 < machine.mem.len() {
 			machine.write_mem(addr, machine.read_grf(self.rt));
+		} else {
+			machine.handle_exception(5, None);
 		}
 		BranchResult::None
 	}

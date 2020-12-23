@@ -40,7 +40,7 @@ module cp0(
 
 	always @(posedge clk)
 		if (reset) begin
-			status <= 0;
+			status <= 'b1000000000001;
 			cause <= 0;
 			epc <= 0;
 		end else begin
