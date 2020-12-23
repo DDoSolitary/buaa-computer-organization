@@ -346,7 +346,7 @@ impl Instruction for SllInstr {
 	}
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
-		machine.write_grf(self.rd, machine.read_grf(self.rt) << self.sa);
+		machine.write_grf(self.rd, u32::wrapping_shl(machine.read_grf(self.rt), self.sa as u32));
 		BranchResult::None
 	}
 }
@@ -370,7 +370,7 @@ impl Instruction for SllvInstr {
 	}
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
-		machine.write_grf(self.rd, machine.read_grf(self.rt) << machine.read_grf(self.rs));
+		machine.write_grf(self.rd, u32::wrapping_shl(machine.read_grf(self.rt), machine.read_grf(self.rs)));
 		BranchResult::None
 	}
 }
@@ -394,7 +394,7 @@ impl Instruction for SrlInstr {
 	}
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
-		machine.write_grf(self.rd, machine.read_grf(self.rt) >> self.sa);
+		machine.write_grf(self.rd, u32::wrapping_shr(machine.read_grf(self.rt), self.sa as u32));
 		BranchResult::None
 	}
 }
@@ -418,7 +418,7 @@ impl Instruction for SrlvInstr {
 	}
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
-		machine.write_grf(self.rd, machine.read_grf(self.rt) >> machine.read_grf(self.rs));
+		machine.write_grf(self.rd, u32::wrapping_shr(machine.read_grf(self.rt), machine.read_grf(self.rs)));
 		BranchResult::None
 	}
 }
@@ -442,7 +442,7 @@ impl Instruction for SraInstr {
 	}
 
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
-		machine.write_grf(self.rd, (machine.read_grf(self.rt) as i32 >> self.sa) as u32);
+		machine.write_grf(self.rd, i32::wrapping_shr(machine.read_grf(self.rt) as i32, self.sa as u32) as u32);
 		BranchResult::None
 	}
 }
@@ -468,7 +468,7 @@ impl Instruction for SravInstr {
 	fn execute_on(&self, machine: &mut MipsMachine) -> BranchResult {
 		machine.write_grf(
 			self.rd,
-			(machine.read_grf(self.rt) as i32 >> machine.read_grf(self.rs)) as u32
+			i32::wrapping_shr(machine.read_grf(self.rt) as i32, machine.read_grf(self.rs)) as u32
 		);
 		BranchResult::None
 	}
