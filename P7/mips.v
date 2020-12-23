@@ -194,7 +194,7 @@ module mips(
 		.int_req(cp0_int_req), .epc_out(cp0_epc), .read_data(cp0_read_data)
 	);
 
-	bridge brige(
+	bridge bridge(
 		.vaddr(em_alu_result),
 		.mode(br_mode),
 		.int_req(cp0_int_req),
