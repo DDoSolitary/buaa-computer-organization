@@ -9,6 +9,7 @@ module bridge #(
 	parameter DEV1_RO_ADDR = 8
 ) (
 	input wire [31:0] vaddr,
+	input wire [`MEM_TYPE_LEN - 1:0] type,
 	input wire [`MEM_MODE_LEN - 1:0] mode,
 	input wire int_req,
 	input wire [31:0] dev0_read_data,
@@ -33,6 +34,7 @@ module bridge #(
 
 	wire err =
 		vaddr[1:0] != 0 ||
+		type != `MEM_TYPE_WORD ||
 		!(dev0_selected || dev1_selected) ||
 		mode == `MEM_MODE_WRITE &&
 			(dev0_selected && dev_addr == DEV0_RO_ADDR ||

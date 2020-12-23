@@ -196,7 +196,7 @@ module mips(
 
 	bridge bridge(
 		.vaddr(em_alu_result),
-		.mode(br_mode),
+		.type(em_mem_type), .mode(br_mode),
 		.int_req(cp0_int_req),
 		.dev0_read_data(timer0_read_data), .dev1_read_data(timer1_read_data),
 		.dev_addr(br_dev_addr),
