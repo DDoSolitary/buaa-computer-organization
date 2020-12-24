@@ -91,7 +91,7 @@ impl MipsMachine {
 		self.pc = HANDLER_ADDR;
 		self.write_mem(0, self.read_grf(1));
 		self.pc += WORD_SIZE as u32;
-		self.write_mem(1 * WORD_SIZE as u32, self.read_grf(2));
+		self.write_mem(WORD_SIZE as u32, self.read_grf(2));
 		self.pc += WORD_SIZE as u32;
 		let cause = if let Some(irq_no) = irq_no { 1 << (irq_no as u32 + 8) } else { 0 } | ((exc_code as u32) << 2);
 		if let MachineState::InDelaySlot(_) = self.state {
