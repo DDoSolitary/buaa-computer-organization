@@ -189,7 +189,7 @@ module mips(
 
 	cp0 cp0(
 		.clk(clk), .reset(reset),
-		.addr(em_cp0_addr), .write_data(em_read_data),
+		.addr(em_cp0_addr), .write_data(m_read_data),
 		.bd(cp0_bd), .epc_in(addr), .exc(cp0_exc), .hw_int(cp0_hw_int), .op(em_cp0_op),
 		.int_req(cp0_int_req), .epc_out(cp0_epc), .read_data(cp0_read_data)
 	);
