@@ -5,7 +5,8 @@ use std::process::Command;
 fn main() {
 	let asm_path = Path::new("src").join("code_handler.asm");
 	println!("cargo:rerun-if-changed={}", asm_path.to_string_lossy());
-	let output = Command::new("mars-mips")
+	let mars_path = env::var_os("MARS").unwrap_or("mars-mips".into());
+	let output = Command::new(mars_path)
 		.args(&[
 			"a", "nc", "db",
 			"mc", "CompactDataAtZero",
