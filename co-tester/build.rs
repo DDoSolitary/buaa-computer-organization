@@ -5,8 +5,15 @@ use std::process::Command;
 fn main() {
 	let asm_path = Path::new("src").join("code_handler.asm");
 	println!("cargo:rerun-if-changed={}", asm_path.to_string_lossy());
-	let mars_path = env::var_os("MARS").unwrap_or("mars-mips".into());
-	let output = Command::new(mars_path)
+	println!("cargo:rerun-if-env-changed=MARS_JAR");
+	let mut cmd;
+	if let Some(jar_path) = env::var_os("MARS_JAR") {
+		cmd = Command::new("java");
+		cmd.arg("-jar").arg(jar_path);
+	} else {
+		cmd = Command::new("mars-mips");
+	}
+	let output = cmd
 		.args(&[
 			"a", "nc", "db",
 			"mc", "CompactDataAtZero",
