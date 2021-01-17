@@ -15,7 +15,7 @@ strum_macros = "0.20"
 tempfile = "3.1.0"
 tokio = { version = "0.3.5", features = ["full"] }
 rand = "0.7.3"
-rand_distr = "0.3.0"
+rand_distr = "0.4.0"
 
 [profile.release]
 lto = true
