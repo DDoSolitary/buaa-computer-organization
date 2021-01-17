@@ -72,7 +72,7 @@ trait RngExt {
 
 impl<T: Rng> RngExt for T {
 	fn rand_select<'a, 'b, U>(&'a mut self, data: &'b [U]) -> &'b U {
-		&data[self.gen_range(0, data.len())]
+		&data[self.gen_range(0..data.len())]
 	}
 }
 
@@ -240,7 +240,7 @@ impl Iterator for InstructionGenerator<'_> {
 			InstructionType::Sll => Box::new(SllInstr {
 				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
-				sa: self.rng.gen_range(0, 32),
+				sa: self.rng.gen_range(0..32),
 			}),
 			InstructionType::Sllv => Box::new(SllvInstr {
 				rs: self.gen_grf_read_addr(None),
@@ -250,7 +250,7 @@ impl Iterator for InstructionGenerator<'_> {
 			InstructionType::Srl => Box::new(SrlInstr {
 				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
-				sa: self.rng.gen_range(0, 32),
+				sa: self.rng.gen_range(0..32),
 			}),
 			InstructionType::Srlv => Box::new(SrlvInstr {
 				rs: self.gen_grf_read_addr(None),
@@ -260,7 +260,7 @@ impl Iterator for InstructionGenerator<'_> {
 			InstructionType::Sra => Box::new(SraInstr {
 				rt: self.gen_grf_read_addr(None),
 				rd: self.rng.sample(&self.grf_addr_dist),
-				sa: self.rng.gen_range(0, 32),
+				sa: self.rng.gen_range(0..32),
 			}),
 			InstructionType::Srav => Box::new(SravInstr {
 				rs: self.gen_grf_read_addr(None),
