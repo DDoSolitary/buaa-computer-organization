@@ -25,10 +25,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use futures::prelude::*;
-use tokio::prelude::*;
 use futures::channel::oneshot;
 use strum::{AsStaticRef, IntoEnumIterator, VariantNames};
 use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 #[cfg(unix)]
 use tokio::signal::unix::{SignalKind, signal};
@@ -274,16 +274,20 @@ async fn main() {
 			success_count.fetch_add(1, Ordering::Relaxed);
 		}
 	});
-	#[cfg(unix)] let mut signals = [
-		Box::new(signal(SignalKind::hangup()).unwrap()) as Box<dyn Stream<Item = ()> + Unpin>,
-		Box::new(signal(SignalKind::interrupt()).unwrap()),
-		Box::new(signal(SignalKind::terminate()).unwrap()),
-	];
-	#[cfg(windows)] let mut signals = [
-		Box::new(tokio::signal::windows::ctrl_c().unwrap()) as Box<dyn Stream<Item = ()> + Unpin>,
-		Box::new(tokio::signal::windows::ctrl_break().unwrap()),
-	];
-	let sig_fut = future::select_all(signals.iter_mut().map(|sig| sig.next()));
+	#[cfg(unix)]
+		let mut signals = [
+			signal(SignalKind::hangup()).unwrap(),
+			signal(SignalKind::interrupt()).unwrap(),
+			signal(SignalKind::terminate()).unwrap(),
+		];
+	#[cfg(unix)]
+		let sig_fut = future::select_all(signals.iter_mut().map(|sig| Box::pin(sig.recv())));
+	#[cfg(windows)]
+		let mut ctrl_c = tokio::signal::windows::ctrl_c().unwrap();
+	#[cfg(windows)]
+		let mut ctrl_break = tokio::signal::windows::ctrl_break().unwrap();
+	#[cfg(windows)]
+		let sig_fut = future::select(Box::pin(ctrl_c.recv()), Box::pin(ctrl_break.recv()));
 	future::select_all(vec![
 		Box::new(fut) as Box<dyn Future<Output = ()> + Unpin>,
 		Box::new(cancel_rx.map(|_| ())),
