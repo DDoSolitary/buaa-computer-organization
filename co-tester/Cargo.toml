@@ -11,7 +11,7 @@ lazy_static = "1.4.0"
 num_cpus = "1.13.0"
 regex = "1.4.5"
 strum = "0.20"
-strum_macros = "0.20"
+strum_macros = "0.21"
 tempfile = "3.1.0"
 tokio = { version = "1.2.0", features = ["full"] }
 rand = "0.8.3"
