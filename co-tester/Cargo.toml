@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 clap = "2.33.3"
-futures = "0.3.13"
+futures = "0.3.15"
 lazy_static = "1.4.0"
 num_cpus = "1.13.0"
 regex = "1.4.5"
@@ -14,7 +14,7 @@ strum = "0.20"
 strum_macros = "0.20"
 tempfile = "3.1.0"
 tokio = { version = "1.2.0", features = ["full"] }
-rand = "0.8.3"
+rand = "0.8.4"
 rand_distr = "0.4.0"
 
 [profile.release]
