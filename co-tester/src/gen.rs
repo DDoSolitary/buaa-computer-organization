@@ -137,7 +137,7 @@ impl<'a> InstructionGenerator<'a> {
 	}
 
 	fn gen_base_and_offset(&mut self, addr_mask: u32) -> (u8, i16) {
-		let allow_exc = self.rng.gen_bool(0.2);
+		let allow_exc = self.machine.exception_enabled() && self.rng.gen_bool(0.2);
 		let addr = self.gen_mem_read_addr();
 		let addr = if allow_exc { addr } else { addr & addr_mask };
 		let grf = *self.machine.grf();
@@ -162,7 +162,10 @@ impl<'a> InstructionGenerator<'a> {
 	}
 
 	fn gen_branch_offset(&mut self) -> i16 {
-		let offset = (self.rng.sample(&self.branch_dist) as i16).abs();
+		let mut offset = (self.rng.sample(&self.branch_dist) as i16).abs();
+		if !self.machine.exception_enabled() {
+			offset += 1;
+		}
 		let addr = self.machine.pc() + (offset as u32 + 1) * WORD_SIZE as u32;
 		if addr < self.jump_limit {
 			offset
@@ -181,10 +184,10 @@ impl Iterator for InstructionGenerator<'_> {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.machine.pc() >= self.jump_limit { return None; }
-		if self.rng.gen_bool(0.1) {
+		if self.machine.exception_enabled() && self.rng.gen_bool(0.1) {
 			self.machine.interrupt();
 		}
-		let allow_unaligned_jr = self.rng.gen_bool(0.1);
+		let allow_unaligned_jr = self.machine.exception_enabled() && self.rng.gen_bool(0.1);
 		let jr_candidates = self.machine.grf().iter().enumerate()
 			.filter_map(|(i, x)| {
 				let is_in_range = (self.machine.pc() + 1..self.jump_limit).contains(x);

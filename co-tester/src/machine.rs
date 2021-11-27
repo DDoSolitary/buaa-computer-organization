@@ -56,6 +56,7 @@ impl MipsMachine {
 	pub fn grf_log(&self) -> &[GrfLogEntry] { &self.grf_log }
 	pub fn mem_log(&self) -> &[MemLogEntry] { &self.mem_log }
 	pub fn irq_log(&self) -> &HashSet<u32> { &self.irq_log }
+	pub fn exception_enabled(&self) -> bool { self.exception_enabled }
 
 	fn get_word_addr(addr: u32) -> usize {
 		let addr = addr as usize;
